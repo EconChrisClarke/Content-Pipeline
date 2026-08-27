@@ -3,7 +3,9 @@
     {
       "id": "ciwg4e7t",
       "title": "Colorado River Allocation",
-      "tags": [],
+      "tags": [
+        "Environmental"
+      ],
       "stage": "capture",
       "dead": false,
       "script": "",

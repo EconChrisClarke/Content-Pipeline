@@ -117,12 +117,14 @@
   .imagegrid .imgwrap.uploading::after{content:"…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);color:var(--ink-soft);}
   .imagegrid .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;}
   .script-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
-  .script-preview{border:1px dashed var(--line);border-radius:6px;padding:11px 13px;margin-top:8px;background:var(--surface);}
-  .script-preview p{margin:0 0 10px;font-size:13.5px;line-height:1.55;}
-  .script-preview p:last-child{margin-bottom:0;}
+  .script-editor{width:100%;min-height:340px;padding:11px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;line-height:1.55;font-family:var(--font-body);background:var(--paper);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .script-editor:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .script-editor p{margin:0 0 10px;}
+  .script-editor p:last-child{margin-bottom:0;}
+  .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
   .inline-imgwrap{position:relative;margin:10px 0;}
-  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;}
-  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;top:6px;}
+  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;}
+  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
   .orphan-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
   .orphan-row img{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0;}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
@@ -655,37 +657,190 @@ function orphanedImages(card){
   return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
 }
 
-function insertImagesIntoScript(card, fileList, cursorPos){
+// The script editor is a contenteditable div, not a textarea+preview pair —
+// images render as real <img> elements right inside the box you're typing
+// in. Every node it contains is built with createElement/createTextNode,
+// never innerHTML-from-a-string, so pasted or typed text (including things
+// like literal HTML tags) can never be interpreted as markup.
+
+let savedEditorRange = null; // last known caret position while the editor had focus, so "Insert image" still knows where to drop the image after the file picker steals focus
+document.addEventListener('selectionchange', ()=>{
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl){ savedEditorRange = null; return; }
+  const sel = document.getSelection();
+  if(sel && sel.rangeCount && editorEl.contains(sel.anchorNode)){
+    savedEditorRange = sel.getRangeAt(0).cloneRange();
+  }
+});
+
+function buildImageNode(card, path){
+  const wrap = document.createElement('div');
+  wrap.className = 'inline-imgwrap';
+  wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
+  wrap.dataset.path = path;
+  const img = document.createElement('img');
+  img.className = 'inline-image';
+  img.loading = 'lazy';
+  img.src = imgSrc(path);
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'rm';
+  rm.title = 'Remove';
+  rm.textContent = '×';
+  rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
+  wrap.appendChild(img);
+  wrap.appendChild(rm);
+  return wrap;
+}
+
+function populateScriptEditor(editorEl, script, card){
+  editorEl.innerHTML = '';
+  const blocks = (script || '').split(/\n{2,}/);
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(!trimmed) return;
+    if(isImageLine(trimmed)){
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed)));
+    } else {
+      const p = document.createElement('p');
+      trimmed.split('\n').forEach((line,idx)=>{
+        if(idx>0) p.appendChild(document.createElement('br'));
+        p.appendChild(document.createTextNode(line));
+      });
+      editorEl.appendChild(p);
+    }
+  });
+}
+
+function serializeScriptEditor(editorEl){
+  const parts = [];
+  editorEl.childNodes.forEach(node=>{
+    if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
+      parts.push(scriptImageTag(node.dataset.path));
+    } else if(node.nodeType===1){
+      let text = '';
+      node.childNodes.forEach(n=>{
+        if(n.nodeName==='BR') text += '\n';
+        else text += n.textContent || '';
+      });
+      if(text.trim()) parts.push(text);
+    } else if(node.nodeType===3){
+      if(node.textContent.trim()) parts.push(node.textContent);
+    }
+  });
+  return parts.join('\n\n').trim();
+}
+
+// Inline image wrappers must always be direct children of the editor —
+// serializeScriptEditor only recognizes them there, and populateScriptEditor
+// only ever produces them there. If the caret sits mid-paragraph, inserting
+// the node with Range.insertNode() would nest it inside the surrounding <p>
+// alongside text nodes, and the image reference would be silently lost on
+// serialize (the wrapper's remove-button text is all that survives). So
+// split the paragraph in two around the caret and insert the image between
+// the halves as top-level siblings instead.
+function splitBlockAndInsert(editorEl, range, node){
+  let blockNode = range.startContainer;
+  while(blockNode && blockNode.parentNode !== editorEl){
+    blockNode = blockNode.parentNode;
+  }
+  if(!blockNode){
+    editorEl.appendChild(node);
+    const r = document.createRange();
+    r.setStartAfter(node); r.collapse(true);
+    return r;
+  }
+  if(blockNode === editorEl || (blockNode.classList && blockNode.classList.contains('inline-imgwrap'))){
+    // Caret directly in the editor (empty editor) or landed on an existing
+    // atomic image wrapper - just drop the new node right after it.
+    if(blockNode === editorEl){
+      range.insertNode(node);
+    } else {
+      editorEl.insertBefore(node, blockNode.nextSibling);
+    }
+    const r = document.createRange();
+    r.setStartAfter(node); r.collapse(true);
+    return r;
+  }
+  // blockNode is a paragraph - split it at the caret, node goes in between.
+  const preRange = document.createRange();
+  preRange.setStart(blockNode, 0);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const postRange = document.createRange();
+  postRange.setStart(range.startContainer, range.startOffset);
+  postRange.setEnd(blockNode, blockNode.childNodes.length);
+
+  const beforeP = document.createElement('p');
+  beforeP.appendChild(preRange.cloneContents());
+  const afterP = document.createElement('p');
+  afterP.appendChild(postRange.cloneContents());
+
+  function fragHasContent(el){
+    return Array.from(el.childNodes).some(n=> n.nodeType===1 || (n.textContent && n.textContent.length));
+  }
+
+  const toInsert = [];
+  if(fragHasContent(beforeP)) toInsert.push(beforeP);
+  toInsert.push(node);
+  let afterPUsed = false;
+  if(fragHasContent(afterP)){ toInsert.push(afterP); afterPUsed = true; }
+
+  toInsert.forEach(n=> editorEl.insertBefore(n, blockNode));
+  editorEl.removeChild(blockNode);
+
+  const r = document.createRange();
+  if(afterPUsed) r.setStart(afterP, 0);
+  else r.setStartAfter(node);
+  r.collapse(true);
+  return r;
+}
+
+async function insertImagesIntoScript(card, fileList){
   const files = Array.from(fileList || []);
   if(!files.length) return;
   if(!syncEnabled || !ghConfig){
     setSyncStatus('bad', 'Connect to GitHub in Settings before uploading images.');
     return;
   }
-  commitModalFields(); // lock in whatever else was typed before this upload started
-  (async ()=>{
-    let insertAt = Math.min(cursorPos == null ? card.script.length : cursorPos, card.script.length);
-    const statusEl = document.getElementById('imgUploadStatus');
-    for(const file of files){
-      if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
-      try{
-        const base64 = await fileToBase64(file);
-        const ext = safeExt(file.name);
-        const path = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
-        localImageBlobs.set(path, URL.createObjectURL(file));
-        await ghPutBinaryFile(path, base64, 'Add image for card ' + card.id);
-        card.images.push({path});
-        const tag = '\n\n' + scriptImageTag(path) + '\n\n';
-        card.script = card.script.slice(0, insertAt) + tag + card.script.slice(insertAt);
-        insertAt += tag.length;
-      }catch(err){
-        setSyncStatus('bad', 'Image upload failed — check your GitHub connection in Settings.');
-      }
+  const editorEl = document.getElementById('scriptEditor');
+  let range = (savedEditorRange && editorEl.contains(savedEditorRange.startContainer)) ? savedEditorRange.cloneRange() : null;
+  if(!range){
+    range = document.createRange();
+    range.selectNodeContents(editorEl);
+    range.collapse(false);
+  }
+  const statusEl = document.getElementById('imgUploadStatus');
+  for(const file of files){
+    if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
+    try{
+      const base64 = await fileToBase64(file);
+      const ext = safeExt(file.name);
+      const path = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
+      localImageBlobs.set(path, URL.createObjectURL(file));
+      await ghPutBinaryFile(path, base64, 'Add image for card ' + card.id);
+      card.images.push({path});
+      const node = buildImageNode(card, path);
+      range.deleteContents();
+      range = splitBlockAndInsert(editorEl, range, node);
+    }catch(err){
+      setSyncStatus('bad', 'Image upload failed — check your GitHub connection in Settings.');
     }
-    if(statusEl) statusEl.textContent = '';
-    renderModal();
-    saveToGitHub();
-  })();
+  }
+  if(statusEl) statusEl.textContent = '';
+  card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
+}
+
+function removeInlineImageNode(card, wrapEl, path){
+  wrapEl.remove();
+  card.images = (card.images||[]).filter(i=>i.path!==path);
+  if(localImageBlobs.has(path)){ URL.revokeObjectURL(localImageBlobs.get(path)); localImageBlobs.delete(path); }
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) card.script = serializeScriptEditor(editorEl);
+  if(syncEnabled){
+    ghGetFile(path).then(file=>{ if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id); }).catch(()=>{});
+  }
+  saveToGitHub();
 }
 
 function deleteImageEverywhere(card, path){
@@ -697,25 +852,6 @@ function deleteImageEverywhere(card, path){
       if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id);
     }).catch(()=>{});
   }
-}
-
-function renderScriptPreview(card){
-  const text = card.script || '';
-  const blocks = text.split(/\n{2,}/);
-  let html = '';
-  blocks.forEach(block=>{
-    const trimmed = block.trim();
-    if(!trimmed) return;
-    if(isImageLine(trimmed)){
-      const path = imageLinePath(trimmed);
-      html += '<div class="inline-imgwrap"><img class="inline-image" src="'+escapeHtml(imgSrc(path))+'" loading="lazy">' +
-        '<button class="rm" data-remove-inline-img="'+escapeHtml(path)+'" title="Remove">&times;</button></div>';
-    } else {
-      html += '<p>' + escapeHtml(trimmed).replace(/\n/g,'<br>') + '</p>';
-    }
-  });
-  if(!html) html = '<p class="note" style="font-style:italic;">Preview appears here as you write — use "Insert image" to drop screenshots or charts in right where they belong.</p>';
-  return html;
 }
 
 function renderModal(){
@@ -797,8 +933,7 @@ function renderModal(){
     '<div class="field"><label>Script</label>' +
       '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button><span class="note" id="imgUploadStatus"></span></div>' +
       '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
-      '<textarea id="scriptInput" placeholder="Script text, or research notes if still capturing... Use Insert image to drop a screenshot or chart in wherever your cursor is.">'+escapeHtml(c.script)+'</textarea>' +
-      '<div class="script-preview">'+renderScriptPreview(c)+'</div>' +
+      '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
       orphansHtml +
     '</div>' +
     '<div class="field"><label>Sources / charts / papers</label><div class="sources-list" id="sourcesList">'+sourcesHtml+'</div><button class="small-btn" id="addSource">+ Add source</button></div>' +
@@ -819,16 +954,12 @@ function renderModal(){
     closeModal();
     saveToGitHub();
   };
+  populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
   document.getElementById('scriptImageInput').onchange = (e)=>{
-    const ta = document.getElementById('scriptInput');
-    const cursorPos = ta ? ta.selectionStart : null;
-    insertImagesIntoScript(c, e.target.files, cursorPos);
+    insertImagesIntoScript(c, e.target.files);
     e.target.value = '';
   };
-  modal.querySelectorAll('[data-remove-inline-img]').forEach(btn=>{
-    btn.onclick = ()=>{ commitModalFields(); deleteImageEverywhere(c, btn.dataset.removeInlineImg); renderModal(); saveToGitHub(); };
-  });
   modal.querySelectorAll('[data-place-img]').forEach(btn=>{
     btn.onclick = ()=>{
       commitModalFields();
@@ -849,14 +980,6 @@ function renderModal(){
   const genSubstack = document.getElementById('genSubstack');
   if(genSubstack) genSubstack.onclick = ()=>{ commitModalFields(); c.platforms.substack.draft = generateSubstackDraft(c); renderModal(); };
 
-  const scriptTa = document.getElementById('scriptInput');
-  const previewEl = modal.querySelector('.script-preview');
-  if(scriptTa && previewEl){
-    scriptTa.addEventListener('input', ()=>{
-      previewEl.innerHTML = renderScriptPreview({script: scriptTa.value});
-    });
-  }
-
   modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
     ta.addEventListener('input', ()=>{
       const row = ta.closest('.platform-row');
@@ -876,7 +999,8 @@ function commitModalFields(){
   c.title = document.getElementById('titleInput').value || 'Untitled idea';
   c.stage = document.getElementById('stageInput').value;
   c.tags = document.getElementById('tagsInput').value.split(',').map(t=>t.trim()).filter(Boolean);
-  c.script = document.getElementById('scriptInput').value;
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) c.script = serializeScriptEditor(editorEl);
 
   document.querySelectorAll('#sourcesList .source-item').forEach((row,i)=>{
     if(!c.sources[i]) return;

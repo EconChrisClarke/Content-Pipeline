@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#efe8da; --surface:#fffcf5; --ink:#25241d; --ink-soft:#716b58;
+    --line:#ddd2b8; --accent:#1f5f5b; --accent-soft:#dcebe8;
+    --gold:#a9762e; --gold-soft:#f2e6cf; --danger:#a13d2e; --danger-soft:#f5ddd6;
+    --stage-capture:#8a8471; --stage-research:#a9762e; --stage-scripted:#1f5f5b; --stage-dist:#8c3f34;
+    --font-display:'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1c1b16; --surface:#252420; --ink:#eae4d3; --ink-soft:#a39c86;
+      --line:#3c392e; --accent:#57bcb1; --accent-soft:#203431;
+      --gold:#d9a856; --gold-soft:#332711; --danger:#e0836f; --danger-soft:#3a231e;
+      --stage-capture:#a39c86; --stage-research:#d9a856; --stage-scripted:#57bcb1; --stage-dist:#d98a7a;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1c1b16; --surface:#252420; --ink:#eae4d3; --ink-soft:#a39c86;
+    --line:#3c392e; --accent:#57bcb1; --accent-soft:#203431;
+    --gold:#d9a856; --gold-soft:#332711; --danger:#e0836f; --danger-soft:#3a231e;
+    --stage-capture:#a39c86; --stage-research:#d9a856; --stage-scripted:#57bcb1; --stage-dist:#d98a7a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  header{padding:20px 26px 8px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:5;}
+  header .titlerow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  header h1{margin:0 0 3px;font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:.01em;text-wrap:balance;}
+  header p{margin:0 0 9px;color:var(--ink-soft);font-size:13px;}
+  .syncline{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);padding-bottom:11px;display:flex;align-items:center;gap:6px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-soft);display:inline-block;flex-shrink:0;}
+  .dot.ok{background:var(--accent);}
+  .dot.bad{background:var(--danger);}
+  .toolbar{display:flex;gap:10px;align-items:center;padding:12px 26px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:74px;z-index:4;}
+  .searchbox{flex:1 1 200px;min-width:160px;}
+  .searchbox input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .tagfilter{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .chip{border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);border-radius:999px;padding:4px 11px;font-size:12px;cursor:pointer;user-select:none;}
+  .chip.active{background:var(--accent);color:var(--surface);border-color:var(--accent);}
+  .spacer{flex:1;}
+  .quickadd{display:flex;gap:6px;flex:1 1 260px;min-width:220px;}
+  .quickadd input{flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  button.primary{background:var(--accent);color:var(--surface);border:none;border-radius:7px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  button.primary:hover{opacity:.88;}
+  button.primary:disabled{opacity:.5;cursor:default;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px 14px;font-size:13px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  button.ghost:hover{background:var(--accent-soft);}
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .chip:focus-visible, .card:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 26px;align-items:start;}
+  @media (max-width:1000px){.board{grid-template-columns:1fr 1fr;}}
+  @media (max-width:600px){.board{grid-template-columns:1fr;}}
+  .col{background:var(--surface);border-radius:4px;padding:12px 11px;min-height:120px;border-top:3px solid var(--stage-capture);}
+  .col:nth-of-type(2){border-top-color:var(--stage-research);}
+  .col:nth-of-type(3){border-top-color:var(--stage-scripted);}
+  .col:nth-of-type(4){border-top-color:var(--stage-dist);}
+  .col h2{font-family:var(--font-display);font-weight:600;font-size:14.5px;margin:2px 3px 12px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;}
+  .col h2 span.count{font-family:var(--font-mono);color:var(--ink-soft);font-weight:500;font-variant-numeric:tabular-nums;font-size:12px;}
+  .card{background:var(--paper);border-radius:5px;padding:11px 12px;margin-bottom:9px;cursor:pointer;border:1px solid var(--line);}
+  .card:hover{border-color:var(--accent);}
+  .card h3{margin:0 0 6px;font-family:var(--font-display);font-size:14.5px;font-weight:600;line-height:1.32;text-wrap:balance;}
+  .card .tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;}
+  .tag{font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:3px;color:#fff;letter-spacing:.01em;}
+  .card .meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .card .thumbrow{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
+  .card .thumbrow img{width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--line);}
+  .progress{height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;}
+  .progress > div{height:100%;background:var(--accent);}
+  .empty{color:var(--ink-soft);font-size:12px;padding:10px 6px;font-style:italic;}
+  .archive-toggle{padding:14px 26px;color:var(--ink-soft);font-size:13px;cursor:pointer;font-family:var(--font-mono);}
+  .archive{padding:0 26px 26px;}
+  .archive .card{opacity:.68;}
+  .overlay{position:fixed;inset:0;background:rgba(20,18,12,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto;z-index:20;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border-radius:8px;max-width:640px;width:100%;padding:24px 26px 28px;margin-bottom:40px;border:1px solid var(--line);}
+  .modal h2{margin:0 0 16px;font-family:var(--font-display);font-weight:600;font-size:19px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+  .field input[type=text], .field input[type=password], .field textarea, .field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .field textarea{min-height:90px;resize:vertical;}
+  .field .hint{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:5px;}
+  .row{display:flex;gap:10px;}
+  .row > div{flex:1;}
+  .sources-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .source-item{display:flex;gap:6px;align-items:center;}
+  .source-item input{flex:1;}
+  .small-btn{background:var(--accent-soft);border:none;color:var(--accent);border-radius:5px;padding:6px 10px;font-size:12px;font-family:var(--font-body);font-weight:500;cursor:pointer;white-space:nowrap;}
+  .small-btn:disabled{opacity:.5;cursor:default;}
+  .platform-row{border:1px solid var(--line);border-radius:7px;padding:10px 12px;margin-bottom:8px;}
+  .platform-row .ptop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .platform-row .pname{font-weight:600;font-size:13px;}
+  .platform-row select{width:auto;padding:5px 8px;font-size:12px;}
+  .platform-row textarea{min-height:52px;font-size:12.5px;}
+  .platform-row input[type=text]{font-size:12px;margin-top:6px;}
+  .charcount{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-align:right;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .charcount.over{color:var(--danger);font-weight:600;}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;}
+  .modal-actions .left{display:flex;gap:8px;flex-wrap:wrap;}
+  .banner{background:var(--gold-soft);color:var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;}
+  .banner.done{background:var(--accent-soft);color:var(--accent);}
+  .banner.bad{background:var(--danger-soft);color:var(--danger);}
+  .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:4px;}
+  .stagepill{display:inline-block;font-family:var(--font-mono);font-size:11px;padding:3px 9px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-left:8px;vertical-align:middle;}
+  .imagegrid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+  .imagegrid .imgwrap{position:relative;width:84px;height:84px;}
+  .imagegrid img{width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--line);}
+  .imagegrid .imgwrap.uploading img{opacity:.4;}
+  .imagegrid .imgwrap.uploading::after{content:"…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);color:var(--ink-soft);}
+  .imagegrid .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;}
+  .script-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
+  .script-preview{border:1px dashed var(--line);border-radius:6px;padding:11px 13px;margin-top:8px;background:var(--surface);}
+  .script-preview p{margin:0 0 10px;font-size:13.5px;line-height:1.55;}
+  .script-preview p:last-child{margin-bottom:0;}
+  .inline-imgwrap{position:relative;margin:10px 0;}
+  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;}
+  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;top:6px;}
+  .orphan-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+  .orphan-row img{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0;}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <div class="titlerow">
+      <div>
+        <h1>Content Pipeline</h1>
+        <p>Capture &rarr; Researching &rarr; Scripted &amp; Filmed &rarr; Distributing &mdash; one board, no folders, tags for topics.</p>
+      </div>
+      <button class="ghost" id="settingsBtn">Settings</button>
+    </div>
+    <div class="syncline" id="syncline"><span class="dot" id="syncdot"></span><span id="syncmsg">Checking sync&hellip;</span></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="quickadd">
+      <input type="text" id="quickInput" placeholder="Plop an idea in&hellip; (title only, refine later)">
+      <button class="primary" id="quickAdd">Add</button>
+    </div>
+    <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, sources&hellip;"></div>
+    <div class="tagfilter" id="tagfilter"></div>
+    <div class="spacer"></div>
+    <button class="ghost" id="clearFilter">Clear filters</button>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="archive-toggle" id="archiveToggle">&#9656; Didn't pan out (0)</div>
+  <div class="archive" id="archive" style="display:none;"></div>
+
+  <div class="overlay" id="overlay-el">
+    <div class="modal" id="modal-el"></div>
+  </div>
+</div>
+
+<script>
+const STAGES = [
+  {key:'capture', label:'Capture'},
+  {key:'researching', label:'Researching'},
+  {key:'scripted', label:'Scripted & Filmed'},
+  {key:'distributing', label:'Distributing'}
+];
+
+const PLATFORMS = [
+  {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
+  {key:'instagram',  label:'Instagram / Threads / FB',hashtags:true,  limit:null},
+  {key:'x',          label:'X',                       hashtags:false, limit:280},
+  {key:'youtube',    label:'YouTube',                 hashtags:false, limit:null},
+  {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300},
+  {key:'substack',   label:'Substack',                hashtags:false, limit:null, isSubstack:true}
+];
+
+const TAG_PALETTE = ['#3d5a4c','#a9642f','#4a5a7a','#7a4a5a','#5a7a4a','#7a5a4a','#4a6a7a','#7a4a6a'];
+function tagColor(t){
+  let h=0; for(const c of t) h = (h*31 + c.charCodeAt(0)) % 997;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+
+// ============================================================
+// GitHub-backed persistence
+// Data lives at data/cards.json in the repo. Images live under
+// data/images/. Config (owner/repo/branch/token) is entered once
+// per device and kept only in that device's localStorage — never
+// baked into this file, so the public page carries no secret.
+// ============================================================
+
+const CONFIG_KEY = 'cp_github_config_v1';
+const LS_FALLBACK_KEY = 'cp_fallback_cards_v1';
+const DATA_PATH = 'data/cards.json';
+
+function loadConfig(){
+  try{ return JSON.parse(localStorage.getItem(CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveConfig(cfg){
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+let ghConfig = loadConfig();
+let cardsSha = null; // current known sha of data/cards.json, for conflict-safe writes
+
+function ghHeaders(){
+  return {
+    'Authorization': 'Bearer ' + ghConfig.token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+function ghApiUrl(path){
+  return 'https://api.github.com/repos/' + ghConfig.owner + '/' + ghConfig.repo + '/contents/' + path;
+}
+function b64EncodeUnicode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64DecodeUnicode(str){
+  return decodeURIComponent(escape(atob(str)));
+}
+
+async function ghGetFile(path){
+  const res = await fetch(ghApiUrl(path) + '?ref=' + encodeURIComponent(ghConfig.branch), {headers: ghHeaders()});
+  if(res.status === 404) return null;
+  if(!res.ok) throw {code:'http_'+res.status, message: await res.text()};
+  return res.json();
+}
+async function ghPutFile(path, contentStr, message, sha){
+  const body = {message, content: b64EncodeUnicode(contentStr), branch: ghConfig.branch};
+  if(sha) body.sha = sha;
+  const res = await fetch(ghApiUrl(path), {method:'PUT', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify(body)});
+  if(!res.ok){
+    const text = await res.text();
+    let code = 'http_'+res.status;
+    if(res.status === 409 || res.status === 422) code = 'conflict';
+    if(res.status === 401 || res.status === 403) code = 'auth';
+    throw {code, message: text};
+  }
+  return res.json();
+}
+async function ghPutBinaryFile(path, base64Content, message){
+  const body = {message, content: base64Content, branch: ghConfig.branch};
+  const res = await fetch(ghApiUrl(path), {method:'PUT', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify(body)});
+  if(!res.ok){
+    const text = await res.text();
+    let code = 'http_'+res.status;
+    if(res.status === 401 || res.status === 403) code = 'auth';
+    throw {code, message: text};
+  }
+  return res.json();
+}
+async function ghDeleteFile(path, sha, message){
+  const res = await fetch(ghApiUrl(path), {method:'DELETE', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify({message, sha, branch: ghConfig.branch})});
+  return res.ok;
+}
+
+function setSyncStatus(mode, text){
+  const dot = document.getElementById('syncdot');
+  const msg = document.getElementById('syncmsg');
+  dot.className = 'dot' + (mode==='ok' ? ' ok' : mode==='bad' ? ' bad' : '');
+  msg.textContent = text;
+}
+
+function loadFallbackCards(){
+  try{
+    const raw = localStorage.getItem(LS_FALLBACK_KEY);
+    if(raw){ const p = JSON.parse(raw); if(Array.isArray(p)) return p; }
+  }catch(e){}
+  return [];
+}
+function saveFallbackCards(cards){
+  try{ localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(cards)); }catch(e){}
+}
+
+let state = { cards: loadFallbackCards() };
+let activeFilters = new Set();
+let searchQuery = '';
+let openCardId = null;
+let syncEnabled = false;
+// Instant local previews for images uploaded this session, keyed by GitHub
+// path. GitHub Pages can take 30-60s to actually start serving a file right
+// after it's committed, so pointing straight at the GitHub path immediately
+// after upload shows a broken image icon. A local blob URL sidesteps that —
+// it's this browser's own copy of the file, no network round-trip needed.
+let localImageBlobs = new Map();
+function imgSrc(path){ return localImageBlobs.has(path) ? localImageBlobs.get(path) : path; }
+
+async function loadFromGitHub(){
+  setSyncStatus('', 'Connecting to GitHub…');
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      state.cards = Array.isArray(json.cards) ? json.cards : [];
+      cardsSha = file.sha;
+    } else {
+      // no data file yet - this is a brand new repo, start empty and create it on first save
+      state.cards = [];
+      cardsSha = null;
+    }
+    syncEnabled = true;
+    setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + ' — open this same page on any device to see the same board.');
+  }catch(err){
+    syncEnabled = false;
+    if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it.');
+    } else {
+      setSyncStatus('bad', "Can't reach GitHub right now — showing your last local copy. Changes will retry on next save.");
+    }
+  }
+  render();
+}
+
+async function saveToGitHub(){
+  saveFallbackCards(state.cards);
+  if(!syncEnabled || !ghConfig){ render(); return; }
+  setSyncStatus('', 'Saving…');
+  const payload = JSON.stringify({cards: state.cards}, null, 2);
+  try{
+    const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
+    cardsSha = result.content.sha;
+    setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + ' — open this same page on any device to see the same board.');
+  }catch(err){
+    if(err.code === 'conflict'){
+      // someone/something else saved first - refetch the latest and retry once
+      setSyncStatus('', 'Newer version found — merging…');
+      try{
+        const file = await ghGetFile(DATA_PATH);
+        cardsSha = file ? file.sha : null;
+        const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
+        cardsSha = result.content.sha;
+        setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + '.');
+      }catch(err2){
+        setSyncStatus('bad', "Couldn't save after a conflict — your change is kept locally, try again in a moment.");
+      }
+    } else if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it. Your change is kept locally.');
+    } else {
+      setSyncStatus('bad', "Couldn't reach GitHub — your change is kept locally and will sync on your next edit.");
+    }
+  }
+  render();
+}
+
+// Reconnecting (e.g. re-opening Settings and hitting Connect) must never
+// silently discard cards that only exist locally because an earlier save
+// failed to reach GitHub. Merge by id instead of blindly overwriting:
+// local wins on conflicts (it's the freshest edit on this device), any
+// card that only exists on GitHub is kept too, then the merged result is
+// written straight back so both sides agree.
+async function connectAndMerge(){
+  setSyncStatus('', 'Connecting to GitHub…');
+  const localCards = state.cards;
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    let remoteCards = [];
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      remoteCards = Array.isArray(json.cards) ? json.cards : [];
+      cardsSha = file.sha;
+    } else {
+      cardsSha = null;
+    }
+    const byId = new Map(remoteCards.map(c=>[c.id, c]));
+    localCards.forEach(c=>byId.set(c.id, c)); // local wins on id collision
+    state.cards = [...byId.values()];
+    syncEnabled = true;
+    await saveToGitHub(); // push the merged result so GitHub matches what's on screen
+  }catch(err){
+    // Couldn't even reach GitHub to merge — keep the local copy exactly as-is,
+    // don't touch state.cards, and let the next successful save reconcile it.
+    state.cards = localCards;
+    syncEnabled = false;
+    if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it. Nothing was lost, still showing your local copy.');
+    } else {
+      setSyncStatus('bad', "Can't reach GitHub right now — still showing your local copy, nothing was lost. Try Settings again once you have a connection.");
+    }
+    render();
+  }
+}
+
+async function initSync(){
+  if(!ghConfig || !ghConfig.owner || !ghConfig.repo || !ghConfig.token){
+    setSyncStatus('bad', 'Not connected yet — open Settings to link your GitHub repo.');
+    render();
+    openSettings(true);
+    return;
+  }
+  await loadFromGitHub();
+}
+
+// ---- settings (GitHub connection) ----
+
+function openSettings(forced){
+  const modal = document.getElementById('modal-el');
+  const cfg = ghConfig || {owner:'', repo:'', branch:'main', token:''};
+  modal.innerHTML =
+    '<h2>Connect to GitHub</h2>' +
+    (forced ? '<div class="banner">This page stores your board in a GitHub repo you own. Enter its details once per device — nothing here is saved anywhere but this browser.</div>' : '') +
+    '<div class="field"><label>GitHub username</label><input type="text" id="cfgOwner" value="'+escapeHtml(cfg.owner)+'" placeholder="e.g. EconChrisClarke"></div>' +
+    '<div class="field"><label>Repository name</label><input type="text" id="cfgRepo" value="'+escapeHtml(cfg.repo)+'" placeholder="e.g. content-pipeline"></div>' +
+    '<div class="field"><label>Branch</label><input type="text" id="cfgBranch" value="'+escapeHtml(cfg.branch||'main')+'" placeholder="main"></div>' +
+    '<div class="field"><label>Personal access token</label><input type="password" id="cfgToken" value="'+escapeHtml(cfg.token)+'" placeholder="github_pat_...">' +
+      '<div class="hint">Fine-grained token, scoped to only this repo, with Contents: Read and write. Generated in GitHub → Settings → Developer settings → Personal access tokens. Stored only in this browser.</div></div>' +
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="cfgCancel">Cancel</button></div><button class="primary" id="cfgSave">Connect</button></div>';
+  document.getElementById('overlay-el').classList.add('open');
+  document.getElementById('cfgCancel').onclick = ()=>{ if(!forced) closeModal(); };
+  document.getElementById('cfgSave').onclick = async ()=>{
+    const owner = document.getElementById('cfgOwner').value.trim();
+    const repo = document.getElementById('cfgRepo').value.trim();
+    const branch = document.getElementById('cfgBranch').value.trim() || 'main';
+    const token = document.getElementById('cfgToken').value.trim();
+    if(!owner || !repo || !token){ return; }
+    ghConfig = {owner, repo, branch, token};
+    saveConfig(ghConfig);
+    closeModal();
+    await connectAndMerge();
+  };
+}
+document.getElementById('settingsBtn').onclick = ()=>openSettings(false);
+
+// ---- data model ----
+
+function newPlatformState(){
+  const o = {};
+  PLATFORMS.forEach(p=>{
+    o[p.key] = p.isSubstack
+      ? {status:'not_started', draft:'', link:''}
+      : {status:'not_started', caption:'', link:''};
+  });
+  return o;
+}
+
+function makeCard(overrides){
+  return Object.assign({
+    id: 'c'+Math.random().toString(36).slice(2,9),
+    title: 'Untitled idea',
+    tags: [],
+    stage: 'capture',
+    dead: false,
+    script: '',
+    sources: [],
+    images: [],
+    baseCaption: '',
+    platforms: newPlatformState(),
+    createdAt: new Date().toISOString().slice(0,10)
+  }, overrides);
+}
+
+function allTags(){
+  const s = new Set();
+  state.cards.forEach(c=>c.tags.forEach(t=>s.add(t)));
+  return [...s].sort();
+}
+
+function distributionProgress(card){
+  const total = PLATFORMS.length;
+  const done = PLATFORMS.filter(p=>{
+    const st = card.platforms[p.key].status;
+    return p.isSubstack ? st==='published' : st==='posted';
+  }).length;
+  return {done, total};
+}
+
+function cardHaystack(c){
+  return [
+    c.title, c.script, c.baseCaption,
+    c.tags.join(' '),
+    c.sources.map(s=>s.label+' '+s.url).join(' ')
+  ].join(' ').toLowerCase();
+}
+
+function cardMatchesFilter(c){
+  if(activeFilters.size && !c.tags.some(t=>activeFilters.has(t))) return false;
+  if(searchQuery && !cardHaystack(c).includes(searchQuery.toLowerCase())) return false;
+  return true;
+}
+
+// ---- rendering ----
+
+function renderTagFilter(){
+  const el = document.getElementById('tagfilter');
+  el.innerHTML = '';
+  allTags().forEach(t=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (activeFilters.has(t) ? ' active' : '');
+    chip.textContent = t;
+    chip.style.borderColor = activeFilters.has(t) ? tagColor(t) : '';
+    chip.style.background = activeFilters.has(t) ? tagColor(t) : '';
+    chip.onclick = ()=>{
+      activeFilters.has(t) ? activeFilters.delete(t) : activeFilters.add(t);
+      render();
+    };
+    el.appendChild(chip);
+  });
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function cardEl(c){
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.onclick = ()=>openModal(c.id);
+  const tagsHtml = c.tags.map(t=>'<span class="tag" style="background:'+tagColor(t)+'">'+escapeHtml(t)+'</span>').join('');
+  let extra = '';
+  if(c.stage==='distributing'){
+    const {done,total} = distributionProgress(c);
+    extra = '<div class="progress"><div style="width:'+((done/total)*100)+'%"></div></div><div class="meta" style="margin-top:4px;">'+done+'/'+total+' platforms</div>';
+  }
+  let thumbs = '';
+  if(c.images && c.images.length){
+    thumbs = '<div class="thumbrow">' + c.images.slice(0,4).map(img=>'<img src="'+escapeHtml(imgSrc(img.path))+'" loading="lazy">').join('') + '</div>';
+  }
+  div.innerHTML = '<h3>'+escapeHtml(c.title)+'</h3><div class="tags">'+tagsHtml+'</div><div class="meta">'+c.createdAt+'</div>'+thumbs+extra;
+  return div;
+}
+
+function render(){
+  renderTagFilter();
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  STAGES.forEach(stage=>{
+    const col = document.createElement('div');
+    col.className = 'col';
+    const cards = state.cards.filter(c=>!c.dead && c.stage===stage.key && cardMatchesFilter(c));
+    col.innerHTML = '<h2>'+stage.label+' <span class="count">'+cards.length+'</span></h2>';
+    if(cards.length===0){
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'Nothing here';
+      col.appendChild(e);
+    } else {
+      cards.forEach(c=>col.appendChild(cardEl(c)));
+    }
+    board.appendChild(col);
+  });
+
+  const dead = state.cards.filter(c=>c.dead && cardMatchesFilter(c));
+  document.getElementById('archiveToggle').textContent = '▸ Didn\'t pan out (' + dead.length + ')';
+  const archiveEl = document.getElementById('archive');
+  archiveEl.innerHTML = '';
+  dead.forEach(c=>archiveEl.appendChild(cardEl(c)));
+}
+
+document.getElementById('archiveToggle').onclick = ()=>{
+  const a = document.getElementById('archive');
+  a.style.display = a.style.display==='none' ? 'block' : 'none';
+};
+document.getElementById('clearFilter').onclick = ()=>{ activeFilters.clear(); searchQuery=''; document.getElementById('searchInput').value=''; render(); };
+document.getElementById('searchInput').addEventListener('input', e=>{ searchQuery = e.target.value; render(); });
+
+document.getElementById('quickAdd').onclick = quickAdd;
+document.getElementById('quickInput').addEventListener('keydown', e=>{ if(e.key==='Enter') quickAdd(); });
+function quickAdd(){
+  const input = document.getElementById('quickInput');
+  const title = input.value.trim();
+  if(!title) return;
+  const c = makeCard({title});
+  state.cards.unshift(c);
+  input.value = '';
+  saveToGitHub();
+}
+
+// ---- modal / card detail ----
+
+function openModal(id){
+  openCardId = id;
+  renderModal();
+  document.getElementById('overlay-el').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('overlay-el').classList.remove('open');
+  openCardId = null;
+  render();
+}
+function getCard(){ return state.cards.find(c=>c.id===openCardId); }
+
+function generateSubstackDraft(card){
+  // The script is already written as Substack-ready markdown — paragraphs
+  // with ![](path) image lines dropped in wherever they belong — so the
+  // draft just uses it as-is instead of re-chunking it into sentences,
+  // which would otherwise scramble the image placement.
+  let draft = '# ' + card.title + '\n\n';
+  draft += (card.script||'').trim() || '(No script text yet — write the script first, then regenerate.)';
+  if(card.sources.length){
+    draft += '\n\n---\n**Sources**\n';
+    card.sources.forEach(s=>{ draft += '- [' + (s.label||s.url) + '](' + s.url + ')\n'; });
+  }
+  if(card.tags.length){
+    draft += '\n*Topics: ' + card.tags.join(', ') + '*';
+  }
+  return draft;
+}
+
+function trimToLimit(text, limit){
+  if(!limit || text.length<=limit) return text;
+  const cut = text.slice(0, limit-1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace>0 ? cut.slice(0,lastSpace) : cut) + '…';
+}
+function stripHashtags(text){
+  return text.replace(/\s?#\w+/g, '').replace(/\s{2,}/g,' ').trim();
+}
+function generateCaptionVariants(card){
+  const base = card.baseCaption || '';
+  PLATFORMS.forEach(p=>{
+    if(p.isSubstack) return;
+    let text = base;
+    if(!p.hashtags) text = stripHashtags(text);
+    text = trimToLimit(text, p.limit);
+    card.platforms[p.key].caption = text;
+  });
+}
+function addDays(d, n){
+  const r = new Date(d); r.setDate(r.getDate()+n);
+  return r.toISOString().slice(0,10);
+}
+
+// ---- image upload ----
+
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function safeExt(filename){
+  const m = /\.([a-zA-Z0-9]+)$/.exec(filename || '');
+  return (m ? m[1] : 'png').toLowerCase().replace(/[^a-z0-9]/g,'') || 'png';
+}
+
+// Images live inline in the script text as their own paragraph, tagged
+// with plain markdown: ![](data/images/xyz.png). That keeps ordering and
+// wording exactly as the writer intended, and means the script is already
+// Substack-ready — the draft generator just uses it verbatim.
+function scriptImageTag(path){ return '![](' + path + ')'; }
+function isImageLine(line){ return /^!\[[^\]]*\]\([^)]+\)$/.test(line.trim()); }
+function imageLinePath(line){ const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim()); return m ? m[1] : null; }
+function removeImageFromScript(script, path){
+  const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re = new RegExp('\\n*!\\[[^\\]]*\\]\\('+esc+'\\)\\n*','g');
+  return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function orphanedImages(card){
+  const text = card.script || '';
+  return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
+}
+
+function insertImagesIntoScript(card, fileList, cursorPos){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+  if(!syncEnabled || !ghConfig){
+    setSyncStatus('bad', 'Connect to GitHub in Settings before uploading images.');
+    return;
+  }
+  commitModalFields(); // lock in whatever else was typed before this upload started
+  (async ()=>{
+    let insertAt = Math.min(cursorPos == null ? card.script.length : cursorPos, card.script.length);
+    const statusEl = document.getElementById('imgUploadStatus');
+    for(const file of files){
+      if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
+      try{
+        const base64 = await fileToBase64(file);
+        const ext = safeExt(file.name);
+        const path = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
+        localImageBlobs.set(path, URL.createObjectURL(file));
+        await ghPutBinaryFile(path, base64, 'Add image for card ' + card.id);
+        card.images.push({path});
+        const tag = '\n\n' + scriptImageTag(path) + '\n\n';
+        card.script = card.script.slice(0, insertAt) + tag + card.script.slice(insertAt);
+        insertAt += tag.length;
+      }catch(err){
+        setSyncStatus('bad', 'Image upload failed — check your GitHub connection in Settings.');
+      }
+    }
+    if(statusEl) statusEl.textContent = '';
+    renderModal();
+    saveToGitHub();
+  })();
+}
+
+function deleteImageEverywhere(card, path){
+  card.script = removeImageFromScript(card.script || '', path);
+  card.images = (card.images||[]).filter(i=>i.path!==path);
+  if(localImageBlobs.has(path)){ URL.revokeObjectURL(localImageBlobs.get(path)); localImageBlobs.delete(path); }
+  if(syncEnabled){
+    ghGetFile(path).then(file=>{
+      if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id);
+    }).catch(()=>{});
+  }
+}
+
+function renderScriptPreview(card){
+  const text = card.script || '';
+  const blocks = text.split(/\n{2,}/);
+  let html = '';
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(!trimmed) return;
+    if(isImageLine(trimmed)){
+      const path = imageLinePath(trimmed);
+      html += '<div class="inline-imgwrap"><img class="inline-image" src="'+escapeHtml(imgSrc(path))+'" loading="lazy">' +
+        '<button class="rm" data-remove-inline-img="'+escapeHtml(path)+'" title="Remove">&times;</button></div>';
+    } else {
+      html += '<p>' + escapeHtml(trimmed).replace(/\n/g,'<br>') + '</p>';
+    }
+  });
+  if(!html) html = '<p class="note" style="font-style:italic;">Preview appears here as you write — use "Insert image" to drop screenshots or charts in right where they belong.</p>';
+  return html;
+}
+
+function renderModal(){
+  const c = getCard();
+  if(!c) return;
+  const modal = document.getElementById('modal-el');
+  const tagsInputVal = c.tags.join(', ');
+
+  let sourcesHtml = c.sources.map((s,i)=>
+    '<div class="source-item">' +
+      '<input type="text" placeholder="Label" value="'+escapeHtml(s.label)+'" data-src-label="'+i+'">' +
+      '<input type="text" placeholder="https://..." value="'+escapeHtml(s.url)+'" data-src-url="'+i+'">' +
+      '<button class="small-btn" data-src-remove="'+i+'">Remove</button>' +
+    '</div>').join('');
+
+  const orphans = orphanedImages(c);
+  const orphansHtml = orphans.length
+    ? '<div class="field"><label>Uploaded but not placed in the script yet</label>' +
+        orphans.map(img=>
+          '<div class="orphan-row"><img src="'+escapeHtml(imgSrc(img.path))+'">' +
+          '<button class="small-btn" data-place-img="'+escapeHtml(img.path)+'">Insert into script</button>' +
+          '<button class="small-btn" data-drop-img="'+escapeHtml(img.path)+'" style="background:var(--danger-soft);color:var(--danger);">Delete</button></div>'
+        ).join('') +
+      '</div>'
+    : '';
+
+  let platformsHtml = '';
+  if(c.stage==='distributing'){
+    const {done,total} = distributionProgress(c);
+    const allDone = done===total;
+    platformsHtml += '<div class="field"><label>Distribution</label>';
+    platformsHtml += allDone
+      ? '<div class="banner done">All '+total+' platforms marked complete. Source video in Drive can be deleted 7 days after the last post — auto-delete date: <strong>'+addDays(new Date(),7)+'</strong>.</div>'
+      : '<div class="banner">'+done+'/'+total+' platforms posted. This card is your live backlog for what\'s left.</div>';
+    platformsHtml += '<button class="small-btn" id="genCaptions">Generate caption variants from base caption</button>';
+    platformsHtml += '<div class="field" style="margin-top:8px;"><label>Base caption (usually TikTok\'s)</label><textarea id="baseCaption">'+escapeHtml(c.baseCaption)+'</textarea></div>';
+
+    PLATFORMS.forEach(p=>{
+      const st = c.platforms[p.key];
+      if(p.isSubstack){
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="drafted" '+(st.status==='drafted'?'selected':'')+'>Drafted</option>' +
+            '<option value="published" '+(st.status==='published'?'selected':'')+'>Published</option>' +
+          '</select></div>' +
+          '<button class="small-btn" id="genSubstack">Generate draft from script + sources</button>' +
+          '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
+          '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+        '</div>';
+      } else {
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for '+p.label+'">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+        '</div>';
+      }
+    });
+    platformsHtml += '</div>';
+  }
+
+  modal.innerHTML =
+    '<h2>Edit idea <span class="stagepill">'+STAGES.find(s=>s.key===c.stage).label+'</span></h2>' +
+    '<div class="field"><label>Title</label><input type="text" id="titleInput" value="'+escapeHtml(c.title)+'"></div>' +
+    '<div class="row">' +
+      '<div class="field"><label>Stage</label><select id="stageInput">' +
+        STAGES.map(s=>'<option value="'+s.key+'" '+(s.key===c.stage?'selected':'')+'>'+s.label+'</option>').join('') +
+      '</select></div>' +
+      '<div class="field"><label>Tags (comma separated)</label><input type="text" id="tagsInput" value="'+escapeHtml(tagsInputVal)+'"></div>' +
+    '</div>' +
+    '<div class="field"><label>Script</label>' +
+      '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button><span class="note" id="imgUploadStatus"></span></div>' +
+      '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
+      '<textarea id="scriptInput" placeholder="Script text, or research notes if still capturing... Use Insert image to drop a screenshot or chart in wherever your cursor is.">'+escapeHtml(c.script)+'</textarea>' +
+      '<div class="script-preview">'+renderScriptPreview(c)+'</div>' +
+      orphansHtml +
+    '</div>' +
+    '<div class="field"><label>Sources / charts / papers</label><div class="sources-list" id="sourcesList">'+sourcesHtml+'</div><button class="small-btn" id="addSource">+ Add source</button></div>' +
+    platformsHtml +
+    '<div class="modal-actions">' +
+      '<div class="left"><button class="ghost" id="markDead">'+(c.dead ? 'Restore from archive' : "Mark: didn't pan out")+'</button>' +
+      '<button class="ghost" id="deleteCard" style="color:#a3402f;border-color:#a3402f;">Delete</button></div>' +
+      '<div><button class="ghost" id="closeModalBtn">Close</button><button class="primary" id="saveModal">Save</button></div>' +
+    '</div>';
+
+  document.getElementById('stageInput').onchange = ()=>{ commitModalFields(); renderModal(); };
+  document.getElementById('closeModalBtn').onclick = closeModal;
+  document.getElementById('saveModal').onclick = ()=>{ commitModalFields(); closeModal(); saveToGitHub(); };
+  document.getElementById('addSource').onclick = ()=>{ commitModalFields(); c.sources.push({label:'',url:''}); renderModal(); };
+  document.getElementById('markDead').onclick = ()=>{ commitModalFields(); c.dead = !c.dead; renderModal(); saveToGitHub(); };
+  document.getElementById('deleteCard').onclick = ()=>{
+    state.cards = state.cards.filter(x=>x.id!==c.id);
+    closeModal();
+    saveToGitHub();
+  };
+  document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
+  document.getElementById('scriptImageInput').onchange = (e)=>{
+    const ta = document.getElementById('scriptInput');
+    const cursorPos = ta ? ta.selectionStart : null;
+    insertImagesIntoScript(c, e.target.files, cursorPos);
+    e.target.value = '';
+  };
+  modal.querySelectorAll('[data-remove-inline-img]').forEach(btn=>{
+    btn.onclick = ()=>{ commitModalFields(); deleteImageEverywhere(c, btn.dataset.removeInlineImg); renderModal(); saveToGitHub(); };
+  });
+  modal.querySelectorAll('[data-place-img]').forEach(btn=>{
+    btn.onclick = ()=>{
+      commitModalFields();
+      c.script = (c.script ? c.script.trim() + '\n\n' : '') + scriptImageTag(btn.dataset.placeImg) + '\n\n';
+      renderModal();
+      saveToGitHub();
+    };
+  });
+  modal.querySelectorAll('[data-drop-img]').forEach(btn=>{
+    btn.onclick = ()=>{ commitModalFields(); deleteImageEverywhere(c, btn.dataset.dropImg); renderModal(); saveToGitHub(); };
+  });
+  modal.querySelectorAll('[data-src-remove]').forEach(btn=>{
+    btn.onclick = ()=>{ commitModalFields(); c.sources.splice(+btn.dataset.srcRemove,1); renderModal(); };
+  });
+
+  const genCaptions = document.getElementById('genCaptions');
+  if(genCaptions) genCaptions.onclick = ()=>{ commitModalFields(); generateCaptionVariants(c); renderModal(); };
+  const genSubstack = document.getElementById('genSubstack');
+  if(genSubstack) genSubstack.onclick = ()=>{ commitModalFields(); c.platforms.substack.draft = generateSubstackDraft(c); renderModal(); };
+
+  const scriptTa = document.getElementById('scriptInput');
+  const previewEl = modal.querySelector('.script-preview');
+  if(scriptTa && previewEl){
+    scriptTa.addEventListener('input', ()=>{
+      previewEl.innerHTML = renderScriptPreview({script: scriptTa.value});
+    });
+  }
+
+  modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
+    ta.addEventListener('input', ()=>{
+      const row = ta.closest('.platform-row');
+      const cc = row.querySelector('.charcount');
+      if(cc){
+        const limit = PLATFORMS.find(p=>p.key===ta.dataset.plat).limit;
+        cc.textContent = ta.value.length + (limit ? ' / '+limit : '');
+        cc.classList.toggle('over', !!(limit && ta.value.length>limit));
+      }
+    });
+  });
+}
+
+function commitModalFields(){
+  const c = getCard();
+  if(!c) return;
+  c.title = document.getElementById('titleInput').value || 'Untitled idea';
+  c.stage = document.getElementById('stageInput').value;
+  c.tags = document.getElementById('tagsInput').value.split(',').map(t=>t.trim()).filter(Boolean);
+  c.script = document.getElementById('scriptInput').value;
+
+  document.querySelectorAll('#sourcesList .source-item').forEach((row,i)=>{
+    if(!c.sources[i]) return;
+    c.sources[i].label = row.querySelector('[data-src-label]').value;
+    c.sources[i].url = row.querySelector('[data-src-url]').value;
+  });
+
+  const baseCapEl = document.getElementById('baseCaption');
+  if(baseCapEl) c.baseCaption = baseCapEl.value;
+
+  document.querySelectorAll('[data-plat]').forEach(el=>{
+    const key = el.dataset.plat, field = el.dataset.field;
+    if(c.platforms[key]) c.platforms[key][field] = el.value;
+  });
+}
+
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id === 'overlay-el') closeModal();
+});
+
+initSync();
+</script>
+
+</body>
+</html>

@@ -739,12 +739,15 @@ function buildImageNode(card, path){
 }
 
 // Long-press on an inline image (touch-hold, ~500ms with no significant
-// finger movement) opens a small menu: reorder up/down, or crop. A quick
-// tap still just goes through to the "×" remove button as before.
+// finger movement) opens a small menu: reorder up/down, or crop. On desktop,
+// the same menu opens with a right-click instead — the pointer-based long
+// press is scoped to touch/pen input so a mouse never has to sit and hold.
+// A quick tap still just goes through to the "×" remove button as before.
 function attachLongPress(wrap, card, path){
   let timer = null, startX = 0, startY = 0;
   const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
   wrap.addEventListener('pointerdown', (e)=>{
+    if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // desktop uses right-click instead
     if(e.target.closest && e.target.closest('.rm')) return;
     startX = e.clientX; startY = e.clientY;
     cancel();
@@ -759,7 +762,11 @@ function attachLongPress(wrap, card, path){
   });
   wrap.addEventListener('pointerup', cancel);
   wrap.addEventListener('pointercancel', cancel);
-  wrap.addEventListener('contextmenu', (e)=>{ e.preventDefault(); });
+  wrap.addEventListener('contextmenu', (e)=>{
+    if(e.target.closest && e.target.closest('.rm')) return;
+    e.preventDefault();
+    showImageMenu(wrap, card, wrap.dataset.path);
+  });
 }
 
 let closeImageMenuHandler = null;
@@ -790,20 +797,16 @@ function showImageMenu(wrap, card, path){
 function moveImageBlock(card, wrap, direction){
   const editorEl = document.getElementById('scriptEditor');
   if(!editorEl || !wrap.parentNode) return;
-  // Swap with the nearest sibling that is itself an image, skipping over any
-  // paragraph text in between. Swapping with whatever DOM sibling happened to
-  // be adjacent (paragraph or image alike) let a "move up/down" click quietly
-  // relocate surrounding script text instead of the image it was pressed on —
-  // e.g. Move Down then Move Up would not reliably undo itself once a
-  // paragraph sat next to an image.
-  const isImageWrap = n => !!(n && n.nodeType===1 && n.classList && n.classList.contains('inline-imgwrap'));
+  // Swap with the immediately adjacent sibling — one paragraph (or image) at
+  // a time — whatever that sibling is. Earlier this skipped over paragraph
+  // text to jump straight to the next image, which meant "move down" could
+  // leap the image past several paragraphs in one click; moving one block at
+  // a time keeps reordering predictable relative to the surrounding text.
   if(direction<0){
-    let sib = wrap.previousSibling;
-    while(sib && !isImageWrap(sib)) sib = sib.previousSibling;
+    const sib = wrap.previousSibling;
     if(sib) editorEl.insertBefore(wrap, sib);
   } else {
-    let sib = wrap.nextSibling;
-    while(sib && !isImageWrap(sib)) sib = sib.nextSibling;
+    const sib = wrap.nextSibling;
     if(sib) editorEl.insertBefore(sib, wrap);
   }
   card.script = serializeScriptEditor(editorEl);

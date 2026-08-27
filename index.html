@@ -330,6 +330,44 @@ async function saveToGitHub(){
   render();
 }
 
+// Reconnecting (e.g. re-opening Settings and hitting Connect) must never
+// silently discard cards that only exist locally because an earlier save
+// failed to reach GitHub. Merge by id instead of blindly overwriting:
+// local wins on conflicts (it's the freshest edit on this device), any
+// card that only exists on GitHub is kept too, then the merged result is
+// written straight back so both sides agree.
+async function connectAndMerge(){
+  setSyncStatus('', 'Connecting to GitHub…');
+  const localCards = state.cards;
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    let remoteCards = [];
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      remoteCards = Array.isArray(json.cards) ? json.cards : [];
+      cardsSha = file.sha;
+    } else {
+      cardsSha = null;
+    }
+    const byId = new Map(remoteCards.map(c=>[c.id, c]));
+    localCards.forEach(c=>byId.set(c.id, c)); // local wins on id collision
+    state.cards = [...byId.values()];
+    syncEnabled = true;
+    await saveToGitHub(); // push the merged result so GitHub matches what's on screen
+  }catch(err){
+    // Couldn't even reach GitHub to merge — keep the local copy exactly as-is,
+    // don't touch state.cards, and let the next successful save reconcile it.
+    state.cards = localCards;
+    syncEnabled = false;
+    if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it. Nothing was lost, still showing your local copy.');
+    } else {
+      setSyncStatus('bad', "Can't reach GitHub right now — still showing your local copy, nothing was lost. Try Settings again once you have a connection.");
+    }
+    render();
+  }
+}
+
 async function initSync(){
   if(!ghConfig || !ghConfig.owner || !ghConfig.repo || !ghConfig.token){
     setSyncStatus('bad', 'Not connected yet — open Settings to link your GitHub repo.');
@@ -365,7 +403,7 @@ function openSettings(forced){
     ghConfig = {owner, repo, branch, token};
     saveConfig(ghConfig);
     closeModal();
-    await loadFromGitHub();
+    await connectAndMerge();
   };
 }
 document.getElementById('settingsBtn').onclick = ()=>openSettings(false);

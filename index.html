@@ -122,9 +122,19 @@
   .script-editor p{margin:0 0 10px;}
   .script-editor p:last-child{margin-bottom:0;}
   .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
-  .inline-imgwrap{position:relative;margin:10px 0;}
-  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;}
+  .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
   .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
+  .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
+  .img-longpress-menu button{min-width:36px;}
+  .cropstage{position:relative;max-width:100%;margin:6px auto 14px;background:#000;touch-action:none;}
+  .cropstage img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;}
+  .croprect{position:absolute;border:2px solid var(--accent);box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move;touch-action:none;}
+  .crophandle{position:absolute;width:24px;height:24px;background:var(--accent);border-radius:50%;border:2px solid #fff;touch-action:none;}
+  .crophandle.nw{left:-12px;top:-12px;cursor:nwse-resize;}
+  .crophandle.ne{right:-12px;top:-12px;cursor:nesw-resize;}
+  .crophandle.sw{left:-12px;bottom:-12px;cursor:nesw-resize;}
+  .crophandle.se{right:-12px;bottom:-12px;cursor:nwse-resize;}
   .orphan-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
   .orphan-row img{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0;}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
@@ -161,6 +171,9 @@
 
   <div class="overlay" id="overlay-el">
     <div class="modal" id="modal-el"></div>
+  </div>
+  <div class="overlay" id="cropOverlay-el" style="z-index:30;">
+    <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
   </div>
 </div>
 
@@ -690,7 +703,228 @@ function buildImageNode(card, path){
   rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
   wrap.appendChild(img);
   wrap.appendChild(rm);
+  attachLongPress(wrap, card, path);
   return wrap;
+}
+
+// Long-press on an inline image (touch-hold, ~500ms with no significant
+// finger movement) opens a small menu: reorder up/down, or crop. A quick
+// tap still just goes through to the "×" remove button as before.
+function attachLongPress(wrap, card, path){
+  let timer = null, startX = 0, startY = 0;
+  const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
+  wrap.addEventListener('pointerdown', (e)=>{
+    if(e.target.closest && e.target.closest('.rm')) return;
+    startX = e.clientX; startY = e.clientY;
+    cancel();
+    // Read wrap.dataset.path live rather than closing over the initial `path`:
+    // after a crop, applyCroppedImage swaps the wrapper onto a new path in
+    // place (same DOM node), so a stale closure here would keep pointing
+    // crop/menu actions at the original, now-deleted image path forever.
+    timer = setTimeout(()=>{ timer = null; showImageMenu(wrap, card, wrap.dataset.path); }, 500);
+  });
+  wrap.addEventListener('pointermove', (e)=>{
+    if(timer && (Math.abs(e.clientX-startX)>10 || Math.abs(e.clientY-startY)>10)) cancel();
+  });
+  wrap.addEventListener('pointerup', cancel);
+  wrap.addEventListener('pointercancel', cancel);
+  wrap.addEventListener('contextmenu', (e)=>{ e.preventDefault(); });
+}
+
+let closeImageMenuHandler = null;
+function closeImageMenu(){
+  const existing = document.querySelector('.img-longpress-menu');
+  if(existing) existing.remove();
+  if(closeImageMenuHandler){ document.removeEventListener('pointerdown', closeImageMenuHandler, true); closeImageMenuHandler = null; }
+}
+function showImageMenu(wrap, card, path){
+  closeImageMenu();
+  const menu = document.createElement('div');
+  menu.className = 'img-longpress-menu';
+  menu.contentEditable = 'false';
+  const mkBtn = (label, title, fn)=>{
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'small-btn'; b.title = title; b.textContent = label;
+    b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); closeImageMenu(); fn(); };
+    return b;
+  };
+  menu.appendChild(mkBtn('↑', 'Move up', ()=>moveImageBlock(card, wrap, -1)));
+  menu.appendChild(mkBtn('↓', 'Move down', ()=>moveImageBlock(card, wrap, 1)));
+  menu.appendChild(mkBtn('✂ Crop', 'Crop image', ()=>openCropper(card, path, wrap)));
+  wrap.appendChild(menu);
+  closeImageMenuHandler = (e)=>{ if(!menu.contains(e.target)) closeImageMenu(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeImageMenuHandler, true), 0);
+}
+
+function moveImageBlock(card, wrap, direction){
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl || !wrap.parentNode) return;
+  // Swap with the nearest sibling that is itself an image, skipping over any
+  // paragraph text in between. Swapping with whatever DOM sibling happened to
+  // be adjacent (paragraph or image alike) let a "move up/down" click quietly
+  // relocate surrounding script text instead of the image it was pressed on —
+  // e.g. Move Down then Move Up would not reliably undo itself once a
+  // paragraph sat next to an image.
+  const isImageWrap = n => !!(n && n.nodeType===1 && n.classList && n.classList.contains('inline-imgwrap'));
+  if(direction<0){
+    let sib = wrap.previousSibling;
+    while(sib && !isImageWrap(sib)) sib = sib.previousSibling;
+    if(sib) editorEl.insertBefore(wrap, sib);
+  } else {
+    let sib = wrap.nextSibling;
+    while(sib && !isImageWrap(sib)) sib = sib.nextSibling;
+    if(sib) editorEl.insertBefore(sib, wrap);
+  }
+  card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
+}
+
+// ---- crop ----
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function closeCropper(){
+  document.getElementById('cropOverlay-el').classList.remove('open');
+  document.getElementById('cropModal-el').innerHTML = '';
+}
+
+function openCropper(card, path, wrapEl){
+  const probe = new Image();
+  probe.onload = ()=>{
+    const modal = document.getElementById('cropModal-el');
+    modal.innerHTML = '';
+    const h2 = document.createElement('h2'); h2.textContent = 'Crop image';
+    const stage = document.createElement('div'); stage.className = 'cropstage'; stage.id = 'cropStage';
+    const cropImgEl = document.createElement('img'); cropImgEl.id = 'cropImg'; cropImgEl.src = imgSrc(path);
+    const rect = document.createElement('div'); rect.className = 'croprect'; rect.id = 'cropRect';
+    ['nw','ne','sw','se'].forEach(pos=>{
+      const h = document.createElement('div'); h.className = 'crophandle '+pos; h.dataset.h = pos;
+      rect.appendChild(h);
+    });
+    stage.appendChild(cropImgEl); stage.appendChild(rect);
+    const actions = document.createElement('div'); actions.className = 'modal-actions';
+    const left = document.createElement('div'); left.className = 'left';
+    const cancelBtn = document.createElement('button'); cancelBtn.className='ghost'; cancelBtn.textContent='Cancel'; cancelBtn.type='button';
+    const applyBtn = document.createElement('button'); applyBtn.className='primary'; applyBtn.textContent='Apply crop'; applyBtn.type='button';
+    left.appendChild(cancelBtn); actions.appendChild(left); actions.appendChild(applyBtn);
+    modal.appendChild(h2); modal.appendChild(stage); modal.appendChild(actions);
+    document.getElementById('cropOverlay-el').classList.add('open');
+    cancelBtn.onclick = closeCropper;
+
+    requestAnimationFrame(()=>{
+      const sw = stage.clientWidth, sh = cropImgEl.clientHeight;
+      if(!sw || !sh){ closeCropper(); setSyncStatus('bad', "Couldn't open the cropper — try again."); return; }
+      let box = { x: sw*0.1, y: sh*0.1, w: sw*0.8, h: sh*0.8 };
+      const applyRectStyle = ()=>{
+        rect.style.left = box.x+'px'; rect.style.top = box.y+'px';
+        rect.style.width = box.w+'px'; rect.style.height = box.h+'px';
+      };
+      applyRectStyle();
+
+      let mode = null, startPt = null, startBox = null;
+      const MIN = 24;
+      const onDown = (e, m)=>{
+        mode = m; startPt = {x:e.clientX, y:e.clientY}; startBox = Object.assign({}, box);
+        if(e.target.setPointerCapture){ try{ e.target.setPointerCapture(e.pointerId); }catch(err){} }
+        e.preventDefault();
+      };
+      const onMove = (e)=>{
+        if(!mode) return;
+        const dx = e.clientX-startPt.x, dy = e.clientY-startPt.y;
+        if(mode==='move'){
+          // Pure translation: size never changes, so clamp position against
+          // the box's own (unchanging) width/height.
+          box.x = Math.max(0, Math.min(startBox.x+dx, sw - box.w));
+          box.y = Math.max(0, Math.min(startBox.y+dy, sh - box.h));
+        } else {
+          // Resize: the opposite edge/corner is the anchor and must stay put.
+          // Clamp the *moving* edge against the stage and the anchor, then
+          // derive x/w (or y/h) from that — clamping x and w independently
+          // (as before) let a far-negative x inflate w past the stage edge.
+          if(mode.indexOf('w')!==-1){
+            const anchorRight = startBox.x + startBox.w;
+            const left = Math.max(0, Math.min(startBox.x+dx, anchorRight-MIN));
+            box.x = left; box.w = anchorRight - left;
+          }
+          if(mode.indexOf('e')!==-1){
+            const anchorLeft = startBox.x;
+            const right = Math.min(sw, Math.max(startBox.x+startBox.w+dx, anchorLeft+MIN));
+            box.w = right - anchorLeft;
+          }
+          if(mode.indexOf('n')!==-1){
+            const anchorBottom = startBox.y + startBox.h;
+            const top = Math.max(0, Math.min(startBox.y+dy, anchorBottom-MIN));
+            box.y = top; box.h = anchorBottom - top;
+          }
+          if(mode.indexOf('s')!==-1){
+            const anchorTop = startBox.y;
+            const bottom = Math.min(sh, Math.max(startBox.y+startBox.h+dy, anchorTop+MIN));
+            box.h = bottom - anchorTop;
+          }
+        }
+        applyRectStyle();
+      };
+      const onUp = ()=>{ mode = null; };
+
+      rect.addEventListener('pointerdown', (e)=>{ if(e.target.classList.contains('crophandle')) return; onDown(e, 'move'); });
+      rect.querySelectorAll('.crophandle').forEach(h=>{
+        h.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); onDown(e, h.dataset.h); });
+      });
+      stage.addEventListener('pointermove', onMove);
+      stage.addEventListener('pointerup', onUp);
+      stage.addEventListener('pointercancel', onUp);
+
+      applyBtn.onclick = ()=>{
+        const scaleX = cropImgEl.naturalWidth / sw;
+        const scaleY = cropImgEl.naturalHeight / sh;
+        const sx = box.x*scaleX, sy = box.y*scaleY, sWid = box.w*scaleX, sHei = box.h*scaleY;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(sWid));
+        canvas.height = Math.max(1, Math.round(sHei));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(cropImgEl, sx, sy, sWid, sHei, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob)=>{
+          if(!blob){ setSyncStatus('bad', 'Crop failed — could not process the image.'); return; }
+          closeCropper();
+          await applyCroppedImage(card, path, wrapEl, blob);
+        }, 'image/png');
+      };
+    });
+  };
+  probe.onerror = ()=>{ setSyncStatus('bad', "Couldn't load this image to crop — try again once it's finished syncing."); };
+  probe.src = imgSrc(path);
+}
+
+async function applyCroppedImage(card, oldPath, wrapEl, blob){
+  if(!syncEnabled || !ghConfig){ setSyncStatus('bad', 'Connect to GitHub in Settings before cropping images.'); return; }
+  setSyncStatus('', 'Saving cropped image…');
+  try{
+    const base64 = await blobToBase64(blob);
+    const newPath = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.png';
+    localImageBlobs.set(newPath, URL.createObjectURL(blob));
+    await ghPutBinaryFile(newPath, base64, 'Crop image for card ' + card.id);
+    card.images = (card.images||[]).filter(i=>i.path!==oldPath);
+    card.images.push({path:newPath});
+    if(wrapEl && wrapEl.isConnected){
+      wrapEl.dataset.path = newPath;
+      const imgEl = wrapEl.querySelector('img');
+      if(imgEl) imgEl.src = imgSrc(newPath);
+    }
+    if(localImageBlobs.has(oldPath)){ URL.revokeObjectURL(localImageBlobs.get(oldPath)); localImageBlobs.delete(oldPath); }
+    const editorEl = document.getElementById('scriptEditor');
+    if(editorEl) card.script = serializeScriptEditor(editorEl);
+    saveToGitHub();
+    ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Remove pre-crop original for card ' + card.id); }).catch(()=>{});
+  }catch(err){
+    setSyncStatus('bad', 'Crop upload failed — check your GitHub connection in Settings.');
+  }
 }
 
 function populateScriptEditor(editorEl, script, card){

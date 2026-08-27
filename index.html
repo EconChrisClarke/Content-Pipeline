@@ -122,6 +122,10 @@
   .script-editor p{margin:0 0 10px;}
   .script-editor p:last-child{margin-bottom:0;}
   .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
+  .script-editor-wrap{position:relative;}
+  .gap-handles{position:absolute;inset:0;pointer-events:none;}
+  .gap-handle{position:absolute;left:50%;transform:translate(-50%,-50%);pointer-events:auto;background:var(--surface);border:1px dashed var(--line);color:var(--ink-soft);border-radius:999px;padding:4px 12px;font-size:10.5px;font-family:var(--font-mono);cursor:pointer;white-space:nowrap;min-height:26px;display:flex;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.15);}
+  .gap-handle:hover, .gap-handle:focus-visible{border-color:var(--accent);color:var(--accent);}
   .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
   .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
   .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
@@ -811,6 +815,7 @@ function moveImageBlock(card, wrap, direction){
   }
   card.script = serializeScriptEditor(editorEl);
   saveToGitHub();
+  renderGapHandles(editorEl);
 }
 
 // ---- crop ----
@@ -961,6 +966,66 @@ async function applyCroppedImage(card, oldPath, wrapEl, blob){
   }
 }
 
+// Tapping between two image blocks (or right before the first one / after the
+// last one) has no ordinary caret target on mobile — there's no text node
+// there, just CSS margin between two non-editable image islands, so a tap
+// snaps the cursor to whichever paragraph happens to be nearest instead of
+// where the user meant. This draws small floating "+ Add text" tap targets
+// over exactly those gaps; tapping one drops a fresh empty paragraph at that
+// precise spot and focuses it so typing can start right there. These handles
+// live in their own overlay div, not as real editor content, so they never
+// touch serialization or the move-up/down one-block-at-a-time logic.
+function renderGapHandles(editorEl){
+  const holder = editorEl.parentNode && editorEl.parentNode.querySelector('#gapHandles');
+  if(!holder) return;
+  holder.innerHTML = '';
+  const isImg = n => !!(n && n.nodeType===1 && n.classList && n.classList.contains('inline-imgwrap'));
+  const children = Array.from(editorEl.childNodes).filter(n=>n.nodeType===1);
+  if(!children.length) return;
+  const gaps = [];
+  if(isImg(children[0])) gaps.push({before: null, after: children[0]});
+  for(let i=0;i<children.length-1;i++){
+    if(isImg(children[i]) && isImg(children[i+1])) gaps.push({before: children[i], after: children[i+1]});
+  }
+  if(isImg(children[children.length-1])) gaps.push({before: children[children.length-1], after: null});
+  const wrapRect = holder.getBoundingClientRect();
+  gaps.forEach(gap=>{
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'gap-handle';
+    handle.textContent = '+ Add text';
+    handle.setAttribute('aria-label', 'Insert a text paragraph here');
+    let top;
+    if(gap.before && gap.after){
+      const a = gap.before.getBoundingClientRect(), b = gap.after.getBoundingClientRect();
+      top = ((a.bottom + b.top) / 2) - wrapRect.top;
+    } else if(gap.after){
+      top = (gap.after.getBoundingClientRect().top - wrapRect.top) - 16;
+    } else {
+      top = (gap.before.getBoundingClientRect().bottom - wrapRect.top) + 16;
+    }
+    handle.style.top = Math.max(2, top) + 'px';
+    handle.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const p = document.createElement('p');
+      p.appendChild(document.createElement('br'));
+      if(gap.after) editorEl.insertBefore(p, gap.after);
+      else editorEl.appendChild(p);
+      editorEl.focus();
+      const r = document.createRange();
+      r.setStart(p, 0); r.collapse(true);
+      const sel = document.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      renderGapHandles(editorEl);
+    });
+    holder.appendChild(handle);
+  });
+}
+window.addEventListener('resize', ()=>{
+  const ed = document.getElementById('scriptEditor');
+  if(ed) renderGapHandles(ed);
+});
+
 function populateScriptEditor(editorEl, script, card){
   editorEl.innerHTML = '';
   const blocks = (script || '').split(/\n{2,}/);
@@ -1097,6 +1162,7 @@ async function insertImagesIntoScript(card, fileList){
   if(statusEl) statusEl.textContent = '';
   card.script = serializeScriptEditor(editorEl);
   saveToGitHub();
+  renderGapHandles(editorEl);
 }
 
 function removeInlineImageNode(card, wrapEl, path){
@@ -1109,6 +1175,7 @@ function removeInlineImageNode(card, wrapEl, path){
     ghGetFile(path).then(file=>{ if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id); }).catch(()=>{});
   }
   saveToGitHub();
+  if(editorEl) renderGapHandles(editorEl);
 }
 
 function deleteImageEverywhere(card, path){
@@ -1200,7 +1267,10 @@ function renderModal(){
     '</div>' +
     '<div class="field"><label>Script</label>' +
       '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
-      '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
+      '<div class="script-editor-wrap">' +
+        '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
+        '<div class="gap-handles" id="gapHandles"></div>' +
+      '</div>' +
       orphansHtml +
       '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
         '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
@@ -1225,6 +1295,7 @@ function renderModal(){
     saveToGitHub();
   };
   populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
+  renderGapHandles(document.getElementById('scriptEditor'));
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
   document.getElementById('scriptImageInput').onchange = (e)=>{
     insertImagesIntoScript(c, e.target.files);

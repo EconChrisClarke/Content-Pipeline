@@ -33,7 +33,7 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
-  header{padding:20px 26px 8px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:5;}
+  header{padding:20px 26px 8px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:25;}
   header .titlerow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
   header h1{margin:0 0 3px;font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:.01em;text-wrap:balance;}
   header p{margin:0 0 9px;color:var(--ink-soft);font-size:13px;}
@@ -116,7 +116,7 @@
   .imagegrid .imgwrap.uploading img{opacity:.4;}
   .imagegrid .imgwrap.uploading::after{content:"…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);color:var(--ink-soft);}
   .imagegrid .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;}
-  .script-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
+  .script-toolbar{display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;}
   .script-editor{width:100%;min-height:340px;padding:11px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;line-height:1.55;font-family:var(--font-body);background:var(--paper);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;}
   .script-editor:focus{outline:2px solid var(--accent);outline-offset:1px;}
   .script-editor p{margin:0 0 10px;}
@@ -303,6 +303,37 @@ let syncEnabled = false;
 // it's this browser's own copy of the file, no network round-trip needed.
 let localImageBlobs = new Map();
 function imgSrc(path){ return localImageBlobs.has(path) ? localImageBlobs.get(path) : path; }
+
+// ---- undo (typing corrections) ----
+// Just a mobile-friendly trigger for the browser's own per-keystroke undo
+// history on whichever text field was last being typed in — title, tags,
+// script, captions, etc. Not an app-level "undo my last save/delete/image
+// edit" system: card adds/deletes are rare and easy enough to redo by hand,
+// so this only needs to catch ordinary typos while writing. Ctrl+Z/Cmd+Z
+// already does this natively with a keyboard; the button exists because
+// mobile has no Ctrl key. Lives at the bottom of the script area, right
+// where the typing happens.
+let lastFocusedEditable = null;
+// Chromium keeps a single undo stack shared by every editable region on the
+// page. Calling execCommand('undo') on a field that has no local history of
+// its own (never actually edited — just focused, or freshly populated by
+// populateScriptEditor/renderModal) falls back to that shared stack and can
+// silently revert an edit in a totally unrelated field elsewhere on the page
+// (e.g. the header's quick-add box), stealing focus there in the process —
+// exactly the opposite of "stay put so the user can keep typing". So track
+// which fields have actually received a real edit, and only ever fire
+// execCommand on one of those; otherwise just focus the target and stop.
+let editedFields = new WeakSet();
+document.addEventListener('input', (e)=>{
+  const t = e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor')) editedFields.add(t);
+});
+function triggerTypingUndo(){
+  const fallback = document.getElementById('scriptEditor');
+  const target = (lastFocusedEditable && document.body.contains(lastFocusedEditable)) ? lastFocusedEditable : fallback;
+  if(target && target.focus) target.focus();
+  if(target && editedFields.has(target)) document.execCommand('undo');
+}
 
 async function loadFromGitHub(){
   setSyncStatus('', 'Connecting to GitHub…');
@@ -1165,10 +1196,12 @@ function renderModal(){
       '<div class="field"><label>Tags (comma separated)</label><input type="text" id="tagsInput" value="'+escapeHtml(tagsInputVal)+'"></div>' +
     '</div>' +
     '<div class="field"><label>Script</label>' +
-      '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button><span class="note" id="imgUploadStatus"></span></div>' +
       '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
       '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
       orphansHtml +
+      '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
+        '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
+        '<span class="note" id="imgUploadStatus"></span></div>' +
     '</div>' +
     '<div class="field"><label>Sources / charts / papers</label><div class="sources-list" id="sourcesList">'+sourcesHtml+'</div><button class="small-btn" id="addSource">+ Add source</button></div>' +
     platformsHtml +
@@ -1194,6 +1227,15 @@ function renderModal(){
     insertImagesIntoScript(c, e.target.files);
     e.target.value = '';
   };
+  const typingUndoBtn = document.getElementById('typingUndoBtn');
+  if(typingUndoBtn){
+    typingUndoBtn.addEventListener('mousedown', (e)=>e.preventDefault()); // don't steal focus/selection from the field being corrected
+    typingUndoBtn.addEventListener('click', triggerTypingUndo);
+  }
+  modal.addEventListener('focusin', (e)=>{
+    const t = e.target;
+    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor')) lastFocusedEditable = t;
+  });
   modal.querySelectorAll('[data-place-img]').forEach(btn=>{
     btn.onclick = ()=>{
       commitModalFields();

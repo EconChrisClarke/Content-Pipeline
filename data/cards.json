@@ -8,7 +8,12 @@
       "dead": false,
       "script": "",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/ciwg4e7t-1787808032204-f8df.jpg",
+          "uploading": false
+        }
+      ],
       "baseCaption": "",
       "platforms": {
         "tiktok": {

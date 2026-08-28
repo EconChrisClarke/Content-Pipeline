@@ -122,11 +122,13 @@
   .script-editor p{margin:0 0 10px;}
   .script-editor p:last-child{margin-bottom:0;}
   .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
-  .script-editor-wrap{position:relative;}
-  .gap-handles{position:absolute;inset:0;pointer-events:none;}
-  .gap-handle{position:absolute;left:50%;transform:translate(-50%,-50%);pointer-events:auto;background:var(--surface);border:1px dashed var(--line);color:var(--ink-soft);border-radius:999px;padding:4px 12px;font-size:10.5px;font-family:var(--font-mono);cursor:pointer;white-space:nowrap;min-height:26px;display:flex;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.15);}
-  .gap-handle:hover, .gap-handle:focus-visible{border-color:var(--accent);color:var(--accent);}
   .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  /* Extra-specific selector (three classes) needed to outrank the generic
+     ".field input[type=text]" rule above, which would otherwise paint this
+     like an ordinary boxed field instead of plain Substack-style caption text. */
+  .script-editor .inline-imgwrap .imgcaption{display:block;width:100%;margin-top:6px;padding:2px 6px;border:none;border-bottom:1px solid transparent;background:transparent;color:var(--ink-soft);font-family:var(--font-body);font-style:italic;font-size:12.5px;line-height:1.4;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
+  .script-editor .inline-imgwrap .imgcaption:focus{outline:none;border-bottom-color:var(--line);}
+  .script-editor .inline-imgwrap .imgcaption::placeholder{color:var(--ink-soft);opacity:.6;font-style:italic;}
   .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
   .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
   .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
@@ -692,9 +694,13 @@ function safeExt(filename){
 // with plain markdown: ![](data/images/xyz.png). That keeps ordering and
 // wording exactly as the writer intended, and means the script is already
 // Substack-ready — the draft generator just uses it verbatim.
-function scriptImageTag(path){ return '![](' + path + ')'; }
+function scriptImageTag(path, caption){
+  const safeCap = (caption || '').replace(/[\[\]]/g, '').trim();
+  return '![' + safeCap + '](' + path + ')';
+}
 function isImageLine(line){ return /^!\[[^\]]*\]\([^)]+\)$/.test(line.trim()); }
 function imageLinePath(line){ const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim()); return m ? m[1] : null; }
+function imageLineCaption(line){ const m = /^!\[([^\]]*)\]\([^)]+\)$/.exec(line.trim()); return m ? m[1] : ''; }
 function removeImageFromScript(script, path){
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const re = new RegExp('\\n*!\\[[^\\]]*\\]\\('+esc+'\\)\\n*','g');
@@ -721,7 +727,7 @@ document.addEventListener('selectionchange', ()=>{
   }
 });
 
-function buildImageNode(card, path){
+function buildImageNode(card, path, caption){
   const wrap = document.createElement('div');
   wrap.className = 'inline-imgwrap';
   wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
@@ -730,6 +736,17 @@ function buildImageNode(card, path){
   img.className = 'inline-image';
   img.loading = 'lazy';
   img.src = imgSrc(path);
+  // A Substack-style caption field right under the image — plain italic text,
+  // centered, no border until focused. It's a real <input>, not part of the
+  // rich-text flow, so it behaves like any ordinary form field (including
+  // inside this contentEditable="false" island) regardless of the editable
+  // editor around it. Stored as the image's markdown alt text so it survives
+  // in card.script and rides along verbatim into the Substack draft.
+  const cap = document.createElement('input');
+  cap.type = 'text';
+  cap.className = 'imgcaption';
+  cap.placeholder = 'Add a caption…';
+  cap.value = caption || '';
   const rm = document.createElement('button');
   rm.type = 'button';
   rm.className = 'rm';
@@ -737,6 +754,7 @@ function buildImageNode(card, path){
   rm.textContent = '×';
   rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
   wrap.appendChild(img);
+  wrap.appendChild(cap);
   wrap.appendChild(rm);
   attachLongPress(wrap, card, path);
   return wrap;
@@ -752,7 +770,7 @@ function attachLongPress(wrap, card, path){
   const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
   wrap.addEventListener('pointerdown', (e)=>{
     if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // desktop uses right-click instead
-    if(e.target.closest && e.target.closest('.rm')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
     startX = e.clientX; startY = e.clientY;
     cancel();
     // Read wrap.dataset.path live rather than closing over the initial `path`:
@@ -767,7 +785,7 @@ function attachLongPress(wrap, card, path){
   wrap.addEventListener('pointerup', cancel);
   wrap.addEventListener('pointercancel', cancel);
   wrap.addEventListener('contextmenu', (e)=>{
-    if(e.target.closest && e.target.closest('.rm')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
     e.preventDefault();
     showImageMenu(wrap, card, wrap.dataset.path);
   });
@@ -813,9 +831,9 @@ function moveImageBlock(card, wrap, direction){
     const sib = wrap.nextSibling;
     if(sib) editorEl.insertBefore(sib, wrap);
   }
+  ensureImageSpacers(editorEl);
   card.script = serializeScriptEditor(editorEl);
   saveToGitHub();
-  renderGapHandles(editorEl);
 }
 
 // ---- crop ----
@@ -966,65 +984,44 @@ async function applyCroppedImage(card, oldPath, wrapEl, blob){
   }
 }
 
-// Tapping between two image blocks (or right before the first one / after the
-// last one) has no ordinary caret target on mobile — there's no text node
-// there, just CSS margin between two non-editable image islands, so a tap
-// snaps the cursor to whichever paragraph happens to be nearest instead of
-// where the user meant. This draws small floating "+ Add text" tap targets
-// over exactly those gaps; tapping one drops a fresh empty paragraph at that
-// precise spot and focuses it so typing can start right there. These handles
-// live in their own overlay div, not as real editor content, so they never
-// touch serialization or the move-up/down one-block-at-a-time logic.
-function renderGapHandles(editorEl){
-  const holder = editorEl.parentNode && editorEl.parentNode.querySelector('#gapHandles');
-  if(!holder) return;
-  holder.innerHTML = '';
+// Two inline images with nothing between them leave no ordinary text node in
+// that gap for a tap to land a caret on — mobile browsers were snapping the
+// cursor somewhere unexpected instead of where the user meant. Whenever two
+// images end up directly adjacent (initial render, after inserting new
+// images, after removing one that was separating two others, after a
+// reorder), automatically slot in a plain empty paragraph between them so
+// there's always a normal tap target there. It's an ordinary editable
+// paragraph like any other — if the user never types into it, it simply
+// isn't saved (serializeScriptEditor drops empty paragraphs), so it doesn't
+// pollute the script text; it just quietly reappears next time this runs.
+function ensureImageSpacers(editorEl){
   const isImg = n => !!(n && n.nodeType===1 && n.classList && n.classList.contains('inline-imgwrap'));
-  const children = Array.from(editorEl.childNodes).filter(n=>n.nodeType===1);
-  if(!children.length) return;
-  const gaps = [];
-  if(isImg(children[0])) gaps.push({before: null, after: children[0]});
-  for(let i=0;i<children.length-1;i++){
-    if(isImg(children[i]) && isImg(children[i+1])) gaps.push({before: children[i], after: children[i+1]});
-  }
-  if(isImg(children[children.length-1])) gaps.push({before: children[children.length-1], after: null});
-  const wrapRect = holder.getBoundingClientRect();
-  gaps.forEach(gap=>{
-    const handle = document.createElement('button');
-    handle.type = 'button';
-    handle.className = 'gap-handle';
-    handle.textContent = '+ Add text';
-    handle.setAttribute('aria-label', 'Insert a text paragraph here');
-    let top;
-    if(gap.before && gap.after){
-      const a = gap.before.getBoundingClientRect(), b = gap.after.getBoundingClientRect();
-      top = ((a.bottom + b.top) / 2) - wrapRect.top;
-    } else if(gap.after){
-      top = (gap.after.getBoundingClientRect().top - wrapRect.top) - 16;
-    } else {
-      top = (gap.before.getBoundingClientRect().bottom - wrapRect.top) + 16;
+  const isBlankP = n => !!(n && n.nodeType===1 && n.tagName==='P' && !n.textContent.trim());
+  // Collapse runs of consecutive blank paragraphs first — e.g. removing an
+  // image that used to sit between two spacer paragraphs would otherwise
+  // leave both spacers behind as a stray double gap.
+  let node = editorEl.firstChild;
+  while(node){
+    const next = node.nextSibling;
+    if(isBlankP(node) && isBlankP(next)){
+      editorEl.removeChild(next);
+      continue; // re-check node against its new next sibling
     }
-    handle.style.top = Math.max(2, top) + 'px';
-    handle.addEventListener('click', (e)=>{
-      e.preventDefault(); e.stopPropagation();
-      const p = document.createElement('p');
-      p.appendChild(document.createElement('br'));
-      if(gap.after) editorEl.insertBefore(p, gap.after);
-      else editorEl.appendChild(p);
-      editorEl.focus();
-      const r = document.createRange();
-      r.setStart(p, 0); r.collapse(true);
-      const sel = document.getSelection();
-      sel.removeAllRanges(); sel.addRange(r);
-      renderGapHandles(editorEl);
-    });
-    holder.appendChild(handle);
-  });
+    node = next;
+  }
+  // Then make sure every remaining pair of directly-adjacent images has a
+  // blank paragraph between them.
+  node = editorEl.firstChild;
+  while(node && node.nextSibling){
+    const next = node.nextSibling;
+    if(isImg(node) && isImg(next)){
+      const spacer = document.createElement('p');
+      spacer.appendChild(document.createElement('br'));
+      editorEl.insertBefore(spacer, next);
+    }
+    node = node.nextSibling;
+  }
 }
-window.addEventListener('resize', ()=>{
-  const ed = document.getElementById('scriptEditor');
-  if(ed) renderGapHandles(ed);
-});
 
 function populateScriptEditor(editorEl, script, card){
   editorEl.innerHTML = '';
@@ -1033,7 +1030,7 @@ function populateScriptEditor(editorEl, script, card){
     const trimmed = block.trim();
     if(!trimmed) return;
     if(isImageLine(trimmed)){
-      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed)));
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed)));
     } else {
       const p = document.createElement('p');
       trimmed.split('\n').forEach((line,idx)=>{
@@ -1043,13 +1040,15 @@ function populateScriptEditor(editorEl, script, card){
       editorEl.appendChild(p);
     }
   });
+  ensureImageSpacers(editorEl);
 }
 
 function serializeScriptEditor(editorEl){
   const parts = [];
   editorEl.childNodes.forEach(node=>{
     if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
-      parts.push(scriptImageTag(node.dataset.path));
+      const capInput = node.querySelector('.imgcaption');
+      parts.push(scriptImageTag(node.dataset.path, capInput ? capInput.value : ''));
     } else if(node.nodeType===1){
       let text = '';
       node.childNodes.forEach(n=>{
@@ -1160,9 +1159,9 @@ async function insertImagesIntoScript(card, fileList){
     }
   }
   if(statusEl) statusEl.textContent = '';
+  ensureImageSpacers(editorEl);
   card.script = serializeScriptEditor(editorEl);
   saveToGitHub();
-  renderGapHandles(editorEl);
 }
 
 function removeInlineImageNode(card, wrapEl, path){
@@ -1175,7 +1174,7 @@ function removeInlineImageNode(card, wrapEl, path){
     ghGetFile(path).then(file=>{ if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id); }).catch(()=>{});
   }
   saveToGitHub();
-  if(editorEl) renderGapHandles(editorEl);
+  if(editorEl) ensureImageSpacers(editorEl);
 }
 
 function deleteImageEverywhere(card, path){
@@ -1267,10 +1266,7 @@ function renderModal(){
     '</div>' +
     '<div class="field"><label>Script</label>' +
       '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
-      '<div class="script-editor-wrap">' +
-        '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
-        '<div class="gap-handles" id="gapHandles"></div>' +
-      '</div>' +
+      '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
       orphansHtml +
       '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
         '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
@@ -1295,7 +1291,6 @@ function renderModal(){
     saveToGitHub();
   };
   populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
-  renderGapHandles(document.getElementById('scriptEditor'));
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
   document.getElementById('scriptImageInput').onchange = (e)=>{
     insertImagesIntoScript(c, e.target.files);

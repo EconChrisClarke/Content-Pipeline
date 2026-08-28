@@ -141,6 +141,15 @@
   .script-editor .inline-imgwrap .imgsource-edit:hover{opacity:1;text-decoration:underline;}
   .script-editor .inline-imgwrap .imgsource-input{display:block;width:auto;min-width:220px;max-width:80%;margin:0 auto;padding:2px 6px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-family:var(--font-body);font-size:11.5px;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
   .script-editor .inline-imgwrap .imgsource-input:focus{outline:none;}
+  /* Word-processor-style hyperlinks inside the script text itself (not to be
+     confused with the per-image "Source" link above): select text, then
+     Ctrl/Cmd+K, right-click, or the floating "Link" bubble that appears on
+     any text selection, all open the same small popover to attach a URL. */
+  .script-editor a.scriptlink{color:var(--accent);text-decoration:underline;text-decoration-color:var(--accent-soft);}
+  .link-bubble{position:fixed;z-index:19;background:var(--ink);color:var(--paper);border:none;border-radius:16px;padding:6px 13px;font-size:12.5px;font-family:var(--font-body);cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.32);}
+  .link-popover{position:fixed;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
+  .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .link-popover button{padding:7px 11px;}
   .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
   .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
   .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
@@ -762,6 +771,176 @@ document.addEventListener('selectionchange', ()=>{
   }
 });
 
+// ---- word-processor-style hyperlinks in the script text ----
+// Three ways in, same destination (triggerLinkUI): Ctrl/Cmd+K with text
+// selected, right-clicking selected text, or tapping the small floating
+// "Link" bubble that appears automatically above any text selection (the
+// mobile equivalent of a long-press menu — mobile browsers generally don't
+// hand a custom "contextmenu" event to JS for a plain-text long-press the
+// way desktop right-click does, so a bubble that shows up the instant a
+// selection exists is the reliable cross-browser substitute long-pressing
+// to select naturally leads into).
+const LINK_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+function normalizeLinkUrl(raw){
+  const v = (raw || '').trim();
+  if(!v) return '';
+  if(v.startsWith('#') || LINK_SCHEME_RE.test(v)) return v;
+  return 'https://' + v;
+}
+function findLinkAncestor(node){
+  while(node && node.nodeType !== 9){
+    if(node.nodeType === 1 && node.tagName === 'A' && node.classList.contains('scriptlink')) return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+function selectionTouchesImage(range){
+  const c = range.commonAncestorContainer;
+  const el = c.nodeType === 1 ? c : c.parentNode;
+  return !!(el && el.closest && el.closest('.inline-imgwrap'));
+}
+
+let closeLinkPopoverHandler = null;
+function closeLinkPopover(){
+  const existing = document.querySelector('.link-popover');
+  if(existing) existing.remove();
+  if(closeLinkPopoverHandler){ document.removeEventListener('pointerdown', closeLinkPopoverHandler, true); closeLinkPopoverHandler = null; }
+}
+function positionFloatingEl(el, rect, above){
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
+  let top = above ? rect.top - h - 8 : rect.bottom + 6;
+  if(above && top < 4) top = rect.bottom + 8;
+  if(!above && top + h > window.innerHeight - 8) top = rect.top - h - 6;
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+function openLinkPopover(rect, opts){
+  closeLinkPopover();
+  hideLinkBubble();
+  const pop = document.createElement('div');
+  pop.className = 'link-popover';
+  pop.contentEditable = 'false';
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.placeholder = 'https://…';
+  input.value = opts.mode === 'edit' ? (opts.anchorEl.getAttribute('href') || '') : '';
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'primary';
+  applyBtn.textContent = opts.mode === 'edit' ? 'Update' : 'Add link';
+  pop.appendChild(input);
+  pop.appendChild(applyBtn);
+  if(opts.mode === 'edit'){
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'ghost';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = (e)=>{
+      e.preventDefault();
+      opts.anchorEl.replaceWith(document.createTextNode(opts.anchorEl.textContent));
+      closeLinkPopover();
+    };
+    pop.appendChild(removeBtn);
+  }
+  document.body.appendChild(pop);
+  positionFloatingEl(pop, rect, false);
+  const apply = ()=>{
+    const url = normalizeLinkUrl(input.value);
+    if(!url) return;
+    if(opts.mode === 'edit'){
+      opts.anchorEl.setAttribute('href', url);
+    } else {
+      const editorEl = document.getElementById('scriptEditor');
+      editorEl.focus();
+      const sel = document.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(opts.range);
+      document.execCommand('createLink', false, url);
+      editorEl.querySelectorAll('a:not(.scriptlink)').forEach(a=>{
+        a.classList.add('scriptlink');
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      });
+    }
+    closeLinkPopover();
+  };
+  applyBtn.onclick = (e)=>{ e.preventDefault(); apply(); };
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); apply(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); closeLinkPopover(); }
+  });
+  input.focus();
+  input.select();
+  closeLinkPopoverHandler = (e)=>{ if(!pop.contains(e.target)) closeLinkPopover(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
+}
+
+function triggerLinkUI(range){
+  if(!range || selectionTouchesImage(range)) return;
+  const startAnchor = findLinkAncestor(range.startContainer);
+  const endAnchor = findLinkAncestor(range.endContainer);
+  if(startAnchor && startAnchor === endAnchor){
+    openLinkPopover(startAnchor.getBoundingClientRect(), {mode:'edit', anchorEl: startAnchor});
+    return;
+  }
+  if(range.collapsed) return; // nothing highlighted, and not sitting inside an existing link
+  openLinkPopover(range.getBoundingClientRect(), {mode:'create', range: range.cloneRange()});
+}
+
+let linkBubbleEl = null;
+let lastSelectionRangeForBubble = null;
+function hideLinkBubble(){
+  if(linkBubbleEl){ linkBubbleEl.remove(); linkBubbleEl = null; }
+}
+function showLinkBubble(rect, range){
+  hideLinkBubble();
+  lastSelectionRangeForBubble = range.cloneRange();
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'link-bubble';
+  btn.textContent = '🔗 Link';
+  btn.addEventListener('pointerdown', (e)=>e.preventDefault()); // don't let the tap collapse the text selection first
+  btn.addEventListener('click', (e)=>{ e.preventDefault(); triggerLinkUI(lastSelectionRangeForBubble); });
+  document.body.appendChild(btn);
+  positionFloatingEl(btn, rect, true);
+  linkBubbleEl = btn;
+}
+
+document.addEventListener('keydown', (e)=>{
+  if((e.key !== 'k' && e.key !== 'K') || !(e.ctrlKey || e.metaKey)) return;
+  const editorEl = document.getElementById('scriptEditor');
+  const sel = document.getSelection();
+  if(!editorEl || !sel || !sel.rangeCount || !editorEl.contains(sel.anchorNode)) return;
+  e.preventDefault();
+  triggerLinkUI(sel.getRangeAt(0).cloneRange());
+});
+
+document.addEventListener('contextmenu', (e)=>{
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl || !editorEl.contains(e.target)) return;
+  if(e.target.closest && e.target.closest('.inline-imgwrap')) return; // images have their own menu
+  const sel = document.getSelection();
+  if(!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const inLink = findLinkAncestor(range.startContainer);
+  if(range.collapsed && !inLink) return; // nothing to link — let the normal menu show
+  e.preventDefault();
+  triggerLinkUI(range.cloneRange());
+});
+
+document.addEventListener('selectionchange', ()=>{
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl){ hideLinkBubble(); return; }
+  const sel = document.getSelection();
+  if(!sel || !sel.rangeCount || sel.isCollapsed){ hideLinkBubble(); return; }
+  const range = sel.getRangeAt(0);
+  if(!editorEl.contains(range.commonAncestorContainer) || selectionTouchesImage(range)){ hideLinkBubble(); return; }
+  const rect = range.getBoundingClientRect();
+  if(!rect || (rect.width === 0 && rect.height === 0)){ hideLinkBubble(); return; }
+  showLinkBubble(rect, range);
+});
+
 function buildImageNode(card, path, caption, sourceUrl){
   const wrap = document.createElement('div');
   wrap.className = 'inline-imgwrap';
@@ -883,6 +1062,7 @@ function attachLongPress(wrap, card, path){
   wrap.addEventListener('contextmenu', (e)=>{
     if(e.target.closest && e.target.closest('.rm, .imgcaption, .imgsource-row')) return;
     e.preventDefault();
+    e.stopPropagation(); // don't also trigger the editor-wide link-on-selection contextmenu handler below
     showImageMenu(wrap, card, wrap.dataset.path);
   });
 }
@@ -1131,12 +1311,36 @@ function populateScriptEditor(editorEl, script, card){
       const p = document.createElement('p');
       trimmed.split('\n').forEach((line,idx)=>{
         if(idx>0) p.appendChild(document.createElement('br'));
-        p.appendChild(document.createTextNode(line));
+        appendLineWithLinks(p, line);
       });
       editorEl.appendChild(p);
     }
   });
   ensureImageSpacers(editorEl);
+}
+
+// A hyperlink typed/added inside the script text is stored as an ordinary
+// markdown link — [label](url) — right in the paragraph text, the same way
+// images and sources already ride along as markdown. appendLineWithLinks
+// turns that back into a real <a class="scriptlink"> when the editor is
+// (re)populated; the reverse direction lives in serializeScriptEditor below.
+function appendLineWithLinks(parent, line){
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let lastIndex = 0, m, any = false;
+  while((m = re.exec(line))){
+    any = true;
+    if(m.index > lastIndex) parent.appendChild(document.createTextNode(line.slice(lastIndex, m.index)));
+    const a = document.createElement('a');
+    a.className = 'scriptlink';
+    a.href = m[2];
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = m[1];
+    parent.appendChild(a);
+    lastIndex = re.lastIndex;
+  }
+  if(!any){ parent.appendChild(document.createTextNode(line)); return; }
+  if(lastIndex < line.length) parent.appendChild(document.createTextNode(line.slice(lastIndex)));
 }
 
 function serializeScriptEditor(editorEl){
@@ -1149,6 +1353,11 @@ function serializeScriptEditor(editorEl){
       let text = '';
       node.childNodes.forEach(n=>{
         if(n.nodeName==='BR') text += '\n';
+        else if(n.nodeType===1 && n.tagName==='A'){
+          const label = (n.textContent || '').replace(/[\[\]]/g,'').trim();
+          const href = n.getAttribute('href') || '';
+          text += label ? ('[' + label + '](' + href + ')') : href;
+        }
         else text += n.textContent || '';
       });
       if(text.trim()) parts.push(text);

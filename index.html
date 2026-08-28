@@ -79,7 +79,11 @@
   .archive-toggle{padding:14px 26px;color:var(--ink-soft);font-size:13px;cursor:pointer;font-family:var(--font-mono);}
   .archive{padding:0 26px 26px;}
   .archive .card{opacity:.68;}
-  .overlay{position:fixed;inset:0;background:rgba(20,18,12,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto;z-index:20;}
+  /* Must render above the sticky header (z-index:25) — otherwise the header
+     stays pinned on top of the modal's own top edge (title, and depending on
+     viewport height, the script box) instead of being covered by it like the
+     rest of the page. */
+  .overlay{position:fixed;inset:0;background:rgba(20,18,12,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto;z-index:30;}
   .overlay.open{display:flex;}
   .modal{background:var(--surface);border-radius:8px;max-width:640px;width:100%;padding:24px 26px 28px;margin-bottom:40px;border:1px solid var(--line);}
   .modal h2{margin:0 0 16px;font-family:var(--font-display);font-weight:600;font-size:19px;}
@@ -137,10 +141,10 @@
      inside image captions too): select text, then Ctrl/Cmd+K, right-click,
      or the floating selection toolbar that appears on any text selection. */
   .script-editor a.scriptlink{color:var(--accent);text-decoration:underline;text-decoration-color:var(--accent-soft);}
-  .selection-toolbar{position:fixed;z-index:19;display:flex;gap:2px;background:var(--ink);border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.32);}
+  .selection-toolbar{position:fixed;z-index:31;display:flex;gap:2px;background:var(--ink);border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.32);}
   .selection-toolbar-btn{background:none;border:none;color:var(--paper);border-radius:5px;padding:6px 10px;font-size:14px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
   .selection-toolbar-btn:hover{background:rgba(255,255,255,.15);}
-  .link-popover{position:fixed;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
+  .link-popover{position:fixed;z-index:32;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
   .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .link-popover button{padding:7px 11px;}
   .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
@@ -199,7 +203,7 @@
   <div class="overlay" id="overlay-el">
     <div class="modal" id="modal-el"></div>
   </div>
-  <div class="overlay" id="cropOverlay-el" style="z-index:30;">
+  <div class="overlay" id="cropOverlay-el" style="z-index:35;">
     <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
   </div>
 </div>

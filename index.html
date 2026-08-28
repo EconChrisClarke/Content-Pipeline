@@ -125,28 +125,21 @@
   .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
   /* Extra-specific selector (three classes) needed to outrank the generic
      ".field input[type=text]" rule above, which would otherwise paint this
-     like an ordinary boxed field instead of plain Substack-style caption text. */
-  .script-editor .inline-imgwrap .imgcaption{display:block;width:100%;margin-top:6px;padding:2px 6px;border:none;border-bottom:1px solid transparent;background:transparent;color:var(--ink-soft);font-family:var(--font-body);font-style:italic;font-size:12.5px;line-height:1.4;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
+     like an ordinary boxed field instead of plain Substack-style caption text.
+     The caption is a contenteditable div (not an <input>) so it can hold a
+     real inline <a class="scriptlink"> the same way script paragraphs can —
+     same Ctrl/Cmd+K / right-click / selection-toolbar hyperlink feature works
+     inside it. */
+  .script-editor .inline-imgwrap .imgcaption{display:block;width:100%;margin-top:6px;padding:2px 6px;border:none;border-bottom:1px solid transparent;background:transparent;color:var(--ink-soft);font-family:var(--font-body);font-style:italic;font-size:12.5px;line-height:1.4;text-align:center;-webkit-user-select:text;user-select:text;}
   .script-editor .inline-imgwrap .imgcaption:focus{outline:none;border-bottom-color:var(--line);}
-  .script-editor .inline-imgwrap .imgcaption::placeholder{color:var(--ink-soft);opacity:.6;font-style:italic;}
-  /* Small Substack-style "Source" link row under the caption. Same
-     three-class specificity trick as .imgcaption above so the plain-link
-     look isn't clobbered by the generic .field input rule. */
-  .script-editor .inline-imgwrap .imgsource-row{display:flex;justify-content:center;align-items:center;gap:6px;margin-top:2px;}
-  .script-editor .inline-imgwrap .imgsource-link{font-family:var(--font-body);font-size:11.5px;font-style:italic;color:var(--accent);text-decoration:none;}
-  .script-editor .inline-imgwrap .imgsource-link:hover{text-decoration:underline;}
-  .script-editor .inline-imgwrap .imgsource-add,
-  .script-editor .inline-imgwrap .imgsource-edit{background:none;border:none;padding:0;cursor:pointer;font-family:var(--font-body);font-size:11px;font-style:italic;color:var(--ink-soft);opacity:.7;}
-  .script-editor .inline-imgwrap .imgsource-add:hover,
-  .script-editor .inline-imgwrap .imgsource-edit:hover{opacity:1;text-decoration:underline;}
-  .script-editor .inline-imgwrap .imgsource-input{display:block;width:auto;min-width:220px;max-width:80%;margin:0 auto;padding:2px 6px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-family:var(--font-body);font-size:11.5px;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
-  .script-editor .inline-imgwrap .imgsource-input:focus{outline:none;}
-  /* Word-processor-style hyperlinks inside the script text itself (not to be
-     confused with the per-image "Source" link above): select text, then
-     Ctrl/Cmd+K, right-click, or the floating "Link" bubble that appears on
-     any text selection, all open the same small popover to attach a URL. */
+  .script-editor .inline-imgwrap .imgcaption:empty:before{content:attr(data-placeholder);color:var(--ink-soft);opacity:.6;font-style:italic;pointer-events:none;}
+  /* Word-processor-style hyperlinks inside the script text (and, per above,
+     inside image captions too): select text, then Ctrl/Cmd+K, right-click,
+     or the floating selection toolbar that appears on any text selection. */
   .script-editor a.scriptlink{color:var(--accent);text-decoration:underline;text-decoration-color:var(--accent-soft);}
-  .link-bubble{position:fixed;z-index:19;background:var(--ink);color:var(--paper);border:none;border-radius:16px;padding:6px 13px;font-size:12.5px;font-family:var(--font-body);cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.32);}
+  .selection-toolbar{position:fixed;z-index:19;display:flex;gap:2px;background:var(--ink);border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.32);}
+  .selection-toolbar-btn{background:none;border:none;color:var(--paper);border-radius:5px;padding:6px 10px;font-size:14px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  .selection-toolbar-btn:hover{background:rgba(255,255,255,.15);}
   .link-popover{position:fixed;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
   .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .link-popover button{padding:7px 11px;}
@@ -353,7 +346,7 @@ let lastFocusedEditable = null;
 let editedFields = new WeakSet();
 document.addEventListener('input', (e)=>{
   const t = e.target;
-  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor')) editedFields.add(t);
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && t.classList.contains('imgcaption')))) editedFields.add(t);
 });
 function triggerTypingUndo(){
   const fallback = document.getElementById('scriptEditor');
@@ -712,47 +705,37 @@ function safeExt(filename){
 }
 
 // Images live inline in the script text as their own paragraph, tagged
-// with plain markdown: ![](data/images/xyz.png). That keeps ordering and
-// wording exactly as the writer intended, and means the script is already
-// Substack-ready — the draft generator just uses it verbatim.
-// Source URLs ride along in the standard markdown "title" slot —
-// ![caption](path "https://source-url") — rather than nested brackets, so
-// the existing ![...](...) shape (and its regexes below) barely has to
-// change. imageLinePath strips the title back off; imageLineSourceUrl pulls
-// just the title out.
-function scriptImageTag(path, caption, sourceUrl){
-  const safeCap = (caption || '').replace(/[\[\]]/g, '').trim();
-  const safeUrl = (sourceUrl || '').replace(/"/g, '').trim();
-  const title = safeUrl ? ' "' + safeUrl + '"' : '';
-  return '![' + safeCap + '](' + path + title + ')';
+// with plain markdown: ![caption](data/images/xyz.png). That keeps ordering
+// and wording exactly as the writer intended, and means the script is
+// already Substack-ready — the draft generator just uses it verbatim.
+// Captions can themselves contain an inline [label](url) hyperlink (the same
+// Ctrl/Cmd+K feature the script text has), which means a caption can contain
+// its own "]" and "(" characters — so parseImageLine finds the outer
+// path boundary from the LAST "](" in the line rather than the first "]",
+// since the repo-relative path itself never contains that substring.
+function parseImageLine(line){
+  const t = line.trim();
+  if(!t.startsWith('![') || !t.endsWith(')')) return null;
+  const cut = t.lastIndexOf('](');
+  if(cut === -1) return null;
+  const path = t.slice(cut + 2, -1);
+  if(!path) return null;
+  return { caption: t.slice(2, cut), path };
 }
-function isImageLine(line){ return /^!\[[^\]]*\]\([^)]+\)$/.test(line.trim()); }
-function imageLinePath(line){
-  const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim());
-  if(!m) return null;
-  const titleMatch = /^(.*?)\s+"[^"]*"$/.exec(m[1]);
-  return (titleMatch ? titleMatch[1] : m[1]).trim();
+function scriptImageTag(path, caption){
+  return '![' + (caption || '').trim() + '](' + path + ')';
 }
-function imageLineCaption(line){ const m = /^!\[([^\]]*)\]\([^)]+\)$/.exec(line.trim()); return m ? m[1] : ''; }
-function imageLineSourceUrl(line){
-  const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim());
-  if(!m) return '';
-  const titleMatch = /^.*?\s+"([^"]*)"$/.exec(m[1]);
-  return titleMatch ? titleMatch[1] : '';
-}
+function isImageLine(line){ return !!parseImageLine(line); }
+function imageLinePath(line){ const p = parseImageLine(line); return p ? p.path : null; }
+function imageLineCaption(line){ const p = parseImageLine(line); return p ? p.caption : ''; }
 function removeImageFromScript(script, path){
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const re = new RegExp('\\n*!\\[[^\\]]*\\]\\('+esc+'(?:\\s+"[^"]*")?\\)\\n*','g');
+  const re = new RegExp('\\n*!\\[[\\s\\S]*?\\]\\('+esc+'\\)\\n*','g');
   return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function orphanedImages(card){
   const text = card.script || '';
-  return (card.images||[]).filter(img=>{
-    if(!img.path) return false;
-    const esc = img.path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const re = new RegExp('\\]\\('+esc+'(?:\\s+"[^"]*")?\\)');
-    return !re.test(text);
-  });
+  return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
 }
 
 // The script editor is a contenteditable div, not a textarea+preview pair —
@@ -771,15 +754,19 @@ document.addEventListener('selectionchange', ()=>{
   }
 });
 
-// ---- word-processor-style hyperlinks in the script text ----
-// Three ways in, same destination (triggerLinkUI): Ctrl/Cmd+K with text
-// selected, right-clicking selected text, or tapping the small floating
-// "Link" bubble that appears automatically above any text selection (the
-// mobile equivalent of a long-press menu — mobile browsers generally don't
-// hand a custom "contextmenu" event to JS for a plain-text long-press the
-// way desktop right-click does, so a bubble that shows up the instant a
-// selection exists is the reliable cross-browser substitute long-pressing
-// to select naturally leads into).
+// ---- word-processor-style hyperlinks in the script text (and captions) ----
+// Two "editable roots" carry this feature: the main #scriptEditor, and each
+// image's .imgcaption (a contenteditable div, not a plain <input>, precisely
+// so it can hold a real inline <a> the same way script paragraphs can).
+// Three ways in: Ctrl/Cmd+K with text selected jumps straight to the link
+// popover; right-clicking selected text, or the floating selection toolbar
+// that appears automatically a moment after any text selection settles,
+// offer a small menu (Copy/Cut/Paste/Search/Link) — the mobile equivalent of
+// a long-press menu, since mobile browsers generally don't hand a custom
+// "contextmenu" event to JS for a plain-text long-press the way desktop
+// right-click does, so a toolbar that shows up once a selection has settled
+// is the reliable cross-browser substitute for what long-pressing to select
+// naturally leads into.
 const LINK_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
 function normalizeLinkUrl(raw){
   const v = (raw || '').trim();
@@ -794,10 +781,20 @@ function findLinkAncestor(node){
   }
   return null;
 }
-function selectionTouchesImage(range){
-  const c = range.commonAncestorContainer;
-  const el = c.nodeType === 1 ? c : c.parentNode;
-  return !!(el && el.closest && el.closest('.inline-imgwrap'));
+// Which editable region (if any) a node lives in for link/toolbar purposes:
+// the caption itself if it's inside one (even though the caption sits inside
+// a contentEditable="false" image island), #scriptEditor if it's plain
+// script text, or null for anything else in an image wrap (the "×" remove
+// button, the raw <img> — those keep the image's own long-press/crop menu).
+function findLinkEditableRoot(node){
+  let n = node;
+  while(n && n.nodeType !== 9){
+    if(n.nodeType === 1 && n.classList && n.classList.contains('imgcaption')) return n;
+    if(n.nodeType === 1 && n.classList && n.classList.contains('inline-imgwrap')) return null;
+    if(n.nodeType === 1 && n.id === 'scriptEditor') return n;
+    n = n.parentNode;
+  }
+  return null;
 }
 
 let closeLinkPopoverHandler = null;
@@ -817,7 +814,7 @@ function positionFloatingEl(el, rect, above){
 }
 function openLinkPopover(rect, opts){
   closeLinkPopover();
-  hideLinkBubble();
+  closeSelectionToolbar();
   const pop = document.createElement('div');
   pop.className = 'link-popover';
   pop.contentEditable = 'false';
@@ -851,13 +848,13 @@ function openLinkPopover(rect, opts){
     if(opts.mode === 'edit'){
       opts.anchorEl.setAttribute('href', url);
     } else {
-      const editorEl = document.getElementById('scriptEditor');
-      editorEl.focus();
+      const root = opts.editableRoot;
+      root.focus();
       const sel = document.getSelection();
       sel.removeAllRanges();
       sel.addRange(opts.range);
       document.execCommand('createLink', false, url);
-      editorEl.querySelectorAll('a:not(.scriptlink)').forEach(a=>{
+      root.querySelectorAll('a:not(.scriptlink)').forEach(a=>{
         a.classList.add('scriptlink');
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
@@ -876,151 +873,190 @@ function openLinkPopover(rect, opts){
   setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
 }
 
-function triggerLinkUI(range){
-  if(!range || selectionTouchesImage(range)) return;
+function triggerLinkUI(range, editableRoot){
+  if(!range) return;
   const startAnchor = findLinkAncestor(range.startContainer);
   const endAnchor = findLinkAncestor(range.endContainer);
   if(startAnchor && startAnchor === endAnchor){
     openLinkPopover(startAnchor.getBoundingClientRect(), {mode:'edit', anchorEl: startAnchor});
     return;
   }
-  if(range.collapsed) return; // nothing highlighted, and not sitting inside an existing link
-  openLinkPopover(range.getBoundingClientRect(), {mode:'create', range: range.cloneRange()});
+  if(range.collapsed || !editableRoot) return; // nothing highlighted, and not sitting inside an existing link
+  openLinkPopover(range.getBoundingClientRect(), {mode:'create', range: range.cloneRange(), editableRoot});
 }
 
-let linkBubbleEl = null;
-let lastSelectionRangeForBubble = null;
-function hideLinkBubble(){
-  if(linkBubbleEl){ linkBubbleEl.remove(); linkBubbleEl = null; }
+// The floating selection toolbar offers the same everyday actions a native
+// long-press/right-click menu would (copy/cut/paste/search) alongside Link,
+// since our own popover replaces the native menu when it takes over the
+// gesture — leaving those out would be a step backward from what the
+// browser already gave people for free.
+let selectionToolbarEl = null;
+let selectionToolbarCloseHandler = null;
+let selectionToolbarShownForRange = null;
+function closeSelectionToolbar(){
+  if(selectionToolbarEl){ selectionToolbarEl.remove(); selectionToolbarEl = null; }
+  if(selectionToolbarCloseHandler){ document.removeEventListener('pointerdown', selectionToolbarCloseHandler, true); selectionToolbarCloseHandler = null; }
+  selectionToolbarShownForRange = null;
 }
-function showLinkBubble(rect, range){
-  hideLinkBubble();
-  lastSelectionRangeForBubble = range.cloneRange();
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'link-bubble';
-  btn.textContent = '🔗 Link';
-  btn.addEventListener('pointerdown', (e)=>e.preventDefault()); // don't let the tap collapse the text selection first
-  btn.addEventListener('click', (e)=>{ e.preventDefault(); triggerLinkUI(lastSelectionRangeForBubble); });
-  document.body.appendChild(btn);
-  positionFloatingEl(btn, rect, true);
-  linkBubbleEl = btn;
+function rangesEqual(a, b){
+  return !!a && !!b && a.startContainer===b.startContainer && a.startOffset===b.startOffset && a.endContainer===b.endContainer && a.endOffset===b.endOffset;
+}
+function showSelectionToolbar(rect, range, editableRoot){
+  closeSelectionToolbar();
+  closeLinkPopover();
+  const savedRange = range.cloneRange();
+  const selectedText = savedRange.toString();
+  const restoreSelection = ()=>{
+    editableRoot.focus();
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  };
+  const bar = document.createElement('div');
+  bar.className = 'selection-toolbar';
+  bar.contentEditable = 'false';
+  const mk = (label, title, fn)=>{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'selection-toolbar-btn';
+    b.title = title;
+    b.textContent = label;
+    b.addEventListener('pointerdown', (e)=>e.preventDefault()); // don't let the tap collapse the selection first
+    b.addEventListener('click', (e)=>{ e.preventDefault(); fn(); });
+    return b;
+  };
+  bar.appendChild(mk('⧉', 'Copy', ()=>{ restoreSelection(); document.execCommand('copy'); closeSelectionToolbar(); }));
+  bar.appendChild(mk('✂', 'Cut', ()=>{ restoreSelection(); document.execCommand('cut'); closeSelectionToolbar(); }));
+  bar.appendChild(mk('📋', 'Paste', async ()=>{
+    restoreSelection();
+    try{
+      const text = await navigator.clipboard.readText();
+      document.execCommand('insertText', false, text);
+    }catch(err){
+      document.execCommand('paste'); // most browsers block this; readText above is the real path
+    }
+    closeSelectionToolbar();
+  }));
+  bar.appendChild(mk('🔍', 'Search the web', ()=>{
+    window.open('https://www.google.com/search?q=' + encodeURIComponent(selectedText), '_blank', 'noopener');
+    closeSelectionToolbar();
+  }));
+  bar.appendChild(mk('🔗', 'Link', ()=>{
+    closeSelectionToolbar();
+    triggerLinkUI(savedRange, editableRoot);
+  }));
+  document.body.appendChild(bar);
+  positionFloatingEl(bar, rect, true);
+  selectionToolbarEl = bar;
+  selectionToolbarShownForRange = savedRange;
+  selectionToolbarCloseHandler = (e)=>{ if(!bar.contains(e.target)) closeSelectionToolbar(); };
+  setTimeout(()=>document.addEventListener('pointerdown', selectionToolbarCloseHandler, true), 0);
 }
 
 document.addEventListener('keydown', (e)=>{
   if((e.key !== 'k' && e.key !== 'K') || !(e.ctrlKey || e.metaKey)) return;
-  const editorEl = document.getElementById('scriptEditor');
   const sel = document.getSelection();
-  if(!editorEl || !sel || !sel.rangeCount || !editorEl.contains(sel.anchorNode)) return;
+  if(!sel || !sel.rangeCount) return;
+  const root = findLinkEditableRoot(sel.anchorNode);
+  if(!root) return;
   e.preventDefault();
-  triggerLinkUI(sel.getRangeAt(0).cloneRange());
+  triggerLinkUI(sel.getRangeAt(0).cloneRange(), root);
 });
 
 document.addEventListener('contextmenu', (e)=>{
-  const editorEl = document.getElementById('scriptEditor');
-  if(!editorEl || !editorEl.contains(e.target)) return;
-  if(e.target.closest && e.target.closest('.inline-imgwrap')) return; // images have their own menu
+  const root = findLinkEditableRoot(e.target);
+  if(!root) return;
   const sel = document.getSelection();
   if(!sel || !sel.rangeCount) return;
   const range = sel.getRangeAt(0);
   const inLink = findLinkAncestor(range.startContainer);
-  if(range.collapsed && !inLink) return; // nothing to link — let the normal menu show
+  if(range.collapsed && !inLink) return; // nothing to act on — let the normal menu show
   e.preventDefault();
-  triggerLinkUI(range.cloneRange());
+  if(inLink){ triggerLinkUI(range.cloneRange(), root); return; }
+  showSelectionToolbar(range.getBoundingClientRect(), range, root);
 });
 
+// The toolbar deliberately waits for the selection to stop changing before
+// it appears — on mobile, dragging the native selection handles fires
+// selectionchange continuously while the highlighted range is still
+// growing/shrinking, and popping the toolbar up on every intermediate word
+// would make it jump around under the user's thumb. Debouncing means it
+// only shows once the highlighted area has actually settled.
+//
+// Two extra guards keep this from fighting with the other two entry points:
+// a link popover already open owns the selection (Ctrl/Cmd+K and the
+// "edit existing link" path both jump straight there, bypassing the
+// toolbar) so a lingering selectionchange from the gesture that led there
+// shouldn't schedule a toolbar underneath it; and a selectionchange that
+// reports the exact same range a right-click just opened the toolbar for
+// (a queued event racing a few milliseconds behind the synchronous
+// contextmenu handler) shouldn't flash it closed and reopen it a moment
+// later — only an actually different selection should restart the debounce.
+let selectionToolbarDebounce = null;
 document.addEventListener('selectionchange', ()=>{
-  const editorEl = document.getElementById('scriptEditor');
-  if(!editorEl){ hideLinkBubble(); return; }
+  if(document.querySelector('.link-popover')) return;
   const sel = document.getSelection();
-  if(!sel || !sel.rangeCount || sel.isCollapsed){ hideLinkBubble(); return; }
-  const range = sel.getRangeAt(0);
-  if(!editorEl.contains(range.commonAncestorContainer) || selectionTouchesImage(range)){ hideLinkBubble(); return; }
-  const rect = range.getBoundingClientRect();
-  if(!rect || (rect.width === 0 && rect.height === 0)){ hideLinkBubble(); return; }
-  showLinkBubble(rect, range);
+  const range = (sel && sel.rangeCount && !sel.isCollapsed) ? sel.getRangeAt(0) : null;
+  const root = range ? findLinkEditableRoot(range.commonAncestorContainer) : null;
+  if(!root){
+    if(selectionToolbarDebounce){ clearTimeout(selectionToolbarDebounce); selectionToolbarDebounce = null; }
+    closeSelectionToolbar();
+    return;
+  }
+  if(selectionToolbarEl && rangesEqual(range, selectionToolbarShownForRange)) return;
+  if(selectionToolbarDebounce) clearTimeout(selectionToolbarDebounce);
+  closeSelectionToolbar(); // don't leave a stale one showing at the old position while the selection is still moving
+  selectionToolbarDebounce = setTimeout(()=>{
+    selectionToolbarDebounce = null;
+    if(document.querySelector('.link-popover')) return;
+    const sel2 = document.getSelection();
+    if(!sel2 || !sel2.rangeCount || sel2.isCollapsed) return;
+    const range2 = sel2.getRangeAt(0);
+    const root2 = findLinkEditableRoot(range2.commonAncestorContainer);
+    if(!root2) return;
+    const rect = range2.getBoundingClientRect();
+    if(!rect || (rect.width === 0 && rect.height === 0)) return;
+    showSelectionToolbar(rect, range2, root2);
+  }, 300);
 });
 
-function buildImageNode(card, path, caption, sourceUrl){
+function buildImageNode(card, path, caption){
   const wrap = document.createElement('div');
   wrap.className = 'inline-imgwrap';
   wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
   wrap.dataset.path = path;
-  wrap.dataset.sourceUrl = sourceUrl || '';
   const img = document.createElement('img');
   img.className = 'inline-image';
   img.loading = 'lazy';
   img.src = imgSrc(path);
-  // A Substack-style caption field right under the image — plain italic text,
-  // centered, no border until focused. It's a real <input>, not part of the
-  // rich-text flow, so it behaves like any ordinary form field (including
-  // inside this contentEditable="false" island) regardless of the editable
-  // editor around it. Stored as the image's markdown alt text so it survives
-  // in card.script and rides along verbatim into the Substack draft.
-  const cap = document.createElement('input');
-  cap.type = 'text';
+  // A Substack-style caption right under the image — plain italic text,
+  // centered, no border until focused. It's a small contenteditable div (not
+  // a plain <input>), so — despite living inside this contentEditable="false"
+  // image island — it can hold real mixed text + <a class="scriptlink">
+  // content: the same Ctrl/Cmd+K / right-click / selection-toolbar hyperlink
+  // feature the main script text has works here too. Stored as the image's
+  // markdown alt text so it survives in card.script and rides along verbatim
+  // into the Substack draft; a caption's own inline link is stored the same
+  // way script-text links are, as [label](url) inside that alt text.
+  const cap = document.createElement('div');
+  cap.contentEditable = 'true';
   cap.className = 'imgcaption';
-  cap.placeholder = 'Add a caption…';
-  cap.value = caption || '';
-  // A small "Source" link row under the caption — e.g. the tweet or article
-  // a screenshot came from. Kept as its own row (not typed inline into the
-  // caption text) because the caption is a plain <input> and can't hold a
-  // real clickable link itself. The URL is tracked on wrap.dataset.sourceUrl
-  // the whole time (updated live as the user types it), so
-  // serializeScriptEditor can read it straight off the wrapper no matter
-  // which of the two states below is currently showing.
-  const srcRow = document.createElement('div');
-  srcRow.className = 'imgsource-row';
-  function renderSourceRow(url){
-    srcRow.innerHTML = '';
-    if(url){
-      const link = document.createElement('a');
-      link.className = 'imgsource-link';
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'Source ↗';
-      const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'imgsource-edit';
-      edit.title = 'Edit source link';
-      edit.textContent = '✎';
-      edit.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); showSourceInput(url); };
-      const rmSrc = document.createElement('button');
-      rmSrc.type = 'button';
-      rmSrc.className = 'imgsource-edit';
-      rmSrc.title = 'Remove source link';
-      rmSrc.textContent = '×';
-      rmSrc.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); wrap.dataset.sourceUrl = ''; renderSourceRow(''); };
-      srcRow.appendChild(link);
-      srcRow.appendChild(edit);
-      srcRow.appendChild(rmSrc);
-    } else {
-      const add = document.createElement('button');
-      add.type = 'button';
-      add.className = 'imgsource-add';
-      add.textContent = '+ Add source link';
-      add.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); showSourceInput(''); };
-      srcRow.appendChild(add);
-    }
-  }
-  function showSourceInput(current){
-    srcRow.innerHTML = '';
-    const input = document.createElement('input');
-    input.type = 'url';
-    input.className = 'imgsource-input';
-    input.placeholder = 'https://…';
-    input.value = current || '';
-    input.addEventListener('input', ()=>{ wrap.dataset.sourceUrl = input.value.trim(); });
-    input.addEventListener('blur', ()=>{ renderSourceRow(wrap.dataset.sourceUrl || ''); });
-    input.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
-      else if(e.key === 'Escape'){ e.preventDefault(); wrap.dataset.sourceUrl = current || ''; renderSourceRow(current || ''); }
-    });
-    srcRow.appendChild(input);
-    input.focus();
-  }
-  renderSourceRow(sourceUrl || '');
+  cap.dataset.placeholder = 'Add a caption…';
+  if(caption) appendLineWithLinks(cap, caption);
+  cap.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); cap.blur(); } // single-line: Enter confirms instead of adding a line break
+  });
+  cap.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/[\r\n]+/g, ' ');
+    document.execCommand('insertText', false, text);
+  });
+  cap.addEventListener('input', ()=>{
+    // Chrome/Safari leave a stray <br> behind after deleting all text in a
+    // contenteditable, which would otherwise keep the :empty placeholder from
+    // reappearing.
+    if(!cap.textContent.trim() && cap.innerHTML) cap.innerHTML = '';
+  });
   const rm = document.createElement('button');
   rm.type = 'button';
   rm.className = 'rm';
@@ -1029,7 +1065,6 @@ function buildImageNode(card, path, caption, sourceUrl){
   rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
   wrap.appendChild(img);
   wrap.appendChild(cap);
-  wrap.appendChild(srcRow);
   wrap.appendChild(rm);
   attachLongPress(wrap, card, path);
   return wrap;
@@ -1045,7 +1080,7 @@ function attachLongPress(wrap, card, path){
   const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
   wrap.addEventListener('pointerdown', (e)=>{
     if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // desktop uses right-click instead
-    if(e.target.closest && e.target.closest('.rm, .imgcaption, .imgsource-row')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
     startX = e.clientX; startY = e.clientY;
     cancel();
     // Read wrap.dataset.path live rather than closing over the initial `path`:
@@ -1060,7 +1095,7 @@ function attachLongPress(wrap, card, path){
   wrap.addEventListener('pointerup', cancel);
   wrap.addEventListener('pointercancel', cancel);
   wrap.addEventListener('contextmenu', (e)=>{
-    if(e.target.closest && e.target.closest('.rm, .imgcaption, .imgsource-row')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
     e.preventDefault();
     e.stopPropagation(); // don't also trigger the editor-wide link-on-selection contextmenu handler below
     showImageMenu(wrap, card, wrap.dataset.path);
@@ -1306,7 +1341,7 @@ function populateScriptEditor(editorEl, script, card){
     const trimmed = block.trim();
     if(!trimmed) return;
     if(isImageLine(trimmed)){
-      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed), imageLineSourceUrl(trimmed)));
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed)));
     } else {
       const p = document.createElement('p');
       trimmed.split('\n').forEach((line,idx)=>{
@@ -1343,23 +1378,31 @@ function appendLineWithLinks(parent, line){
   if(lastIndex < line.length) parent.appendChild(document.createTextNode(line.slice(lastIndex)));
 }
 
+// Shared by script paragraphs and image captions alike — both are just
+// plain text mixed with the occasional <a class="scriptlink">, serialized to
+// the same [label](url) markdown appendLineWithLinks parses back.
+function serializeInlineContent(el){
+  let text = '';
+  el.childNodes.forEach(n=>{
+    if(n.nodeName === 'BR') text += '\n';
+    else if(n.nodeType === 1 && n.tagName === 'A'){
+      const label = (n.textContent || '').trim();
+      const href = n.getAttribute('href') || '';
+      text += label ? ('[' + label + '](' + href + ')') : href;
+    }
+    else text += n.textContent || '';
+  });
+  return text;
+}
+
 function serializeScriptEditor(editorEl){
   const parts = [];
   editorEl.childNodes.forEach(node=>{
     if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
-      const capInput = node.querySelector('.imgcaption');
-      parts.push(scriptImageTag(node.dataset.path, capInput ? capInput.value : '', node.dataset.sourceUrl || ''));
+      const capEl = node.querySelector('.imgcaption');
+      parts.push(scriptImageTag(node.dataset.path, capEl ? serializeInlineContent(capEl).trim() : ''));
     } else if(node.nodeType===1){
-      let text = '';
-      node.childNodes.forEach(n=>{
-        if(n.nodeName==='BR') text += '\n';
-        else if(n.nodeType===1 && n.tagName==='A'){
-          const label = (n.textContent || '').replace(/[\[\]]/g,'').trim();
-          const href = n.getAttribute('href') || '';
-          text += label ? ('[' + label + '](' + href + ')') : href;
-        }
-        else text += n.textContent || '';
-      });
+      const text = serializeInlineContent(node);
       if(text.trim()) parts.push(text);
     } else if(node.nodeType===3){
       if(node.textContent.trim()) parts.push(node.textContent);
@@ -1608,7 +1651,7 @@ function renderModal(){
   }
   modal.addEventListener('focusin', (e)=>{
     const t = e.target;
-    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor')) lastFocusedEditable = t;
+    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && t.classList.contains('imgcaption')))) lastFocusedEditable = t;
   });
   modal.querySelectorAll('[data-place-img]').forEach(btn=>{
     btn.onclick = ()=>{

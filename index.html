@@ -129,6 +129,18 @@
   .script-editor .inline-imgwrap .imgcaption{display:block;width:100%;margin-top:6px;padding:2px 6px;border:none;border-bottom:1px solid transparent;background:transparent;color:var(--ink-soft);font-family:var(--font-body);font-style:italic;font-size:12.5px;line-height:1.4;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
   .script-editor .inline-imgwrap .imgcaption:focus{outline:none;border-bottom-color:var(--line);}
   .script-editor .inline-imgwrap .imgcaption::placeholder{color:var(--ink-soft);opacity:.6;font-style:italic;}
+  /* Small Substack-style "Source" link row under the caption. Same
+     three-class specificity trick as .imgcaption above so the plain-link
+     look isn't clobbered by the generic .field input rule. */
+  .script-editor .inline-imgwrap .imgsource-row{display:flex;justify-content:center;align-items:center;gap:6px;margin-top:2px;}
+  .script-editor .inline-imgwrap .imgsource-link{font-family:var(--font-body);font-size:11.5px;font-style:italic;color:var(--accent);text-decoration:none;}
+  .script-editor .inline-imgwrap .imgsource-link:hover{text-decoration:underline;}
+  .script-editor .inline-imgwrap .imgsource-add,
+  .script-editor .inline-imgwrap .imgsource-edit{background:none;border:none;padding:0;cursor:pointer;font-family:var(--font-body);font-size:11px;font-style:italic;color:var(--ink-soft);opacity:.7;}
+  .script-editor .inline-imgwrap .imgsource-add:hover,
+  .script-editor .inline-imgwrap .imgsource-edit:hover{opacity:1;text-decoration:underline;}
+  .script-editor .inline-imgwrap .imgsource-input{display:block;width:auto;min-width:220px;max-width:80%;margin:0 auto;padding:2px 6px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-family:var(--font-body);font-size:11.5px;text-align:center;appearance:none;-webkit-appearance:none;border-radius:0;}
+  .script-editor .inline-imgwrap .imgsource-input:focus{outline:none;}
   .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
   .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
   .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
@@ -694,21 +706,44 @@ function safeExt(filename){
 // with plain markdown: ![](data/images/xyz.png). That keeps ordering and
 // wording exactly as the writer intended, and means the script is already
 // Substack-ready — the draft generator just uses it verbatim.
-function scriptImageTag(path, caption){
+// Source URLs ride along in the standard markdown "title" slot —
+// ![caption](path "https://source-url") — rather than nested brackets, so
+// the existing ![...](...) shape (and its regexes below) barely has to
+// change. imageLinePath strips the title back off; imageLineSourceUrl pulls
+// just the title out.
+function scriptImageTag(path, caption, sourceUrl){
   const safeCap = (caption || '').replace(/[\[\]]/g, '').trim();
-  return '![' + safeCap + '](' + path + ')';
+  const safeUrl = (sourceUrl || '').replace(/"/g, '').trim();
+  const title = safeUrl ? ' "' + safeUrl + '"' : '';
+  return '![' + safeCap + '](' + path + title + ')';
 }
 function isImageLine(line){ return /^!\[[^\]]*\]\([^)]+\)$/.test(line.trim()); }
-function imageLinePath(line){ const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim()); return m ? m[1] : null; }
+function imageLinePath(line){
+  const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim());
+  if(!m) return null;
+  const titleMatch = /^(.*?)\s+"[^"]*"$/.exec(m[1]);
+  return (titleMatch ? titleMatch[1] : m[1]).trim();
+}
 function imageLineCaption(line){ const m = /^!\[([^\]]*)\]\([^)]+\)$/.exec(line.trim()); return m ? m[1] : ''; }
+function imageLineSourceUrl(line){
+  const m = /^!\[[^\]]*\]\(([^)]+)\)$/.exec(line.trim());
+  if(!m) return '';
+  const titleMatch = /^.*?\s+"([^"]*)"$/.exec(m[1]);
+  return titleMatch ? titleMatch[1] : '';
+}
 function removeImageFromScript(script, path){
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const re = new RegExp('\\n*!\\[[^\\]]*\\]\\('+esc+'\\)\\n*','g');
+  const re = new RegExp('\\n*!\\[[^\\]]*\\]\\('+esc+'(?:\\s+"[^"]*")?\\)\\n*','g');
   return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function orphanedImages(card){
   const text = card.script || '';
-  return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
+  return (card.images||[]).filter(img=>{
+    if(!img.path) return false;
+    const esc = img.path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const re = new RegExp('\\]\\('+esc+'(?:\\s+"[^"]*")?\\)');
+    return !re.test(text);
+  });
 }
 
 // The script editor is a contenteditable div, not a textarea+preview pair —
@@ -727,11 +762,12 @@ document.addEventListener('selectionchange', ()=>{
   }
 });
 
-function buildImageNode(card, path, caption){
+function buildImageNode(card, path, caption, sourceUrl){
   const wrap = document.createElement('div');
   wrap.className = 'inline-imgwrap';
   wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
   wrap.dataset.path = path;
+  wrap.dataset.sourceUrl = sourceUrl || '';
   const img = document.createElement('img');
   img.className = 'inline-image';
   img.loading = 'lazy';
@@ -747,6 +783,65 @@ function buildImageNode(card, path, caption){
   cap.className = 'imgcaption';
   cap.placeholder = 'Add a caption…';
   cap.value = caption || '';
+  // A small "Source" link row under the caption — e.g. the tweet or article
+  // a screenshot came from. Kept as its own row (not typed inline into the
+  // caption text) because the caption is a plain <input> and can't hold a
+  // real clickable link itself. The URL is tracked on wrap.dataset.sourceUrl
+  // the whole time (updated live as the user types it), so
+  // serializeScriptEditor can read it straight off the wrapper no matter
+  // which of the two states below is currently showing.
+  const srcRow = document.createElement('div');
+  srcRow.className = 'imgsource-row';
+  function renderSourceRow(url){
+    srcRow.innerHTML = '';
+    if(url){
+      const link = document.createElement('a');
+      link.className = 'imgsource-link';
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Source ↗';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'imgsource-edit';
+      edit.title = 'Edit source link';
+      edit.textContent = '✎';
+      edit.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); showSourceInput(url); };
+      const rmSrc = document.createElement('button');
+      rmSrc.type = 'button';
+      rmSrc.className = 'imgsource-edit';
+      rmSrc.title = 'Remove source link';
+      rmSrc.textContent = '×';
+      rmSrc.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); wrap.dataset.sourceUrl = ''; renderSourceRow(''); };
+      srcRow.appendChild(link);
+      srcRow.appendChild(edit);
+      srcRow.appendChild(rmSrc);
+    } else {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'imgsource-add';
+      add.textContent = '+ Add source link';
+      add.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); showSourceInput(''); };
+      srcRow.appendChild(add);
+    }
+  }
+  function showSourceInput(current){
+    srcRow.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'url';
+    input.className = 'imgsource-input';
+    input.placeholder = 'https://…';
+    input.value = current || '';
+    input.addEventListener('input', ()=>{ wrap.dataset.sourceUrl = input.value.trim(); });
+    input.addEventListener('blur', ()=>{ renderSourceRow(wrap.dataset.sourceUrl || ''); });
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+      else if(e.key === 'Escape'){ e.preventDefault(); wrap.dataset.sourceUrl = current || ''; renderSourceRow(current || ''); }
+    });
+    srcRow.appendChild(input);
+    input.focus();
+  }
+  renderSourceRow(sourceUrl || '');
   const rm = document.createElement('button');
   rm.type = 'button';
   rm.className = 'rm';
@@ -755,6 +850,7 @@ function buildImageNode(card, path, caption){
   rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
   wrap.appendChild(img);
   wrap.appendChild(cap);
+  wrap.appendChild(srcRow);
   wrap.appendChild(rm);
   attachLongPress(wrap, card, path);
   return wrap;
@@ -770,7 +866,7 @@ function attachLongPress(wrap, card, path){
   const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
   wrap.addEventListener('pointerdown', (e)=>{
     if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // desktop uses right-click instead
-    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption, .imgsource-row')) return;
     startX = e.clientX; startY = e.clientY;
     cancel();
     // Read wrap.dataset.path live rather than closing over the initial `path`:
@@ -785,7 +881,7 @@ function attachLongPress(wrap, card, path){
   wrap.addEventListener('pointerup', cancel);
   wrap.addEventListener('pointercancel', cancel);
   wrap.addEventListener('contextmenu', (e)=>{
-    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
+    if(e.target.closest && e.target.closest('.rm, .imgcaption, .imgsource-row')) return;
     e.preventDefault();
     showImageMenu(wrap, card, wrap.dataset.path);
   });
@@ -1030,7 +1126,7 @@ function populateScriptEditor(editorEl, script, card){
     const trimmed = block.trim();
     if(!trimmed) return;
     if(isImageLine(trimmed)){
-      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed)));
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed), imageLineSourceUrl(trimmed)));
     } else {
       const p = document.createElement('p');
       trimmed.split('\n').forEach((line,idx)=>{
@@ -1048,7 +1144,7 @@ function serializeScriptEditor(editorEl){
   editorEl.childNodes.forEach(node=>{
     if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
       const capInput = node.querySelector('.imgcaption');
-      parts.push(scriptImageTag(node.dataset.path, capInput ? capInput.value : ''));
+      parts.push(scriptImageTag(node.dataset.path, capInput ? capInput.value : '', node.dataset.sourceUrl || ''));
     } else if(node.nodeType===1){
       let text = '';
       node.childNodes.forEach(n=>{

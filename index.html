@@ -164,8 +164,6 @@
   .wordcount-text{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
   .wordcount-text.status-ok{color:var(--accent);font-weight:600;}
   .wordcount-text.status-low, .wordcount-text.status-high{color:var(--gold);font-weight:600;}
-  .calib-sample{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:14px;line-height:1.6;margin-bottom:14px;}
-  .calib-timer{font-family:var(--font-mono);font-size:32px;text-align:center;margin-bottom:14px;color:var(--ink);font-variant-numeric:tabular-nums;}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
 </style>
 </head>
@@ -360,21 +358,15 @@ document.addEventListener('input', (e)=>{
 });
 
 // ---- word count / speaking-pace target ----
-// "3 minutes" isn't a fixed word count — it depends entirely on how fast
-// someone talks. Rather than guess, this lets each person measure their own
-// pace once (read a fixed sample paragraph aloud, timed) and remembers it
-// on this device; until they do, a generic ~150 words/minute average is
-// used as a labeled estimate so the counter is still useful right away.
-const WPM_KEY = 'cp_wpm_v1';
-const DEFAULT_WPM = 150;
+// Fixed pace estimate (no in-app calibration tool anymore — just a flat
+// assumption of how fast the user talks) used both to size the word target
+// for a fixed-length script and to translate the current word count into an
+// estimated spoken duration.
+const WPM = 185;
 const TARGET_MINUTES = 3;
 
-function getSavedWpm(){
-  const v = parseFloat(localStorage.getItem(WPM_KEY));
-  return (v && v > 0) ? v : null;
-}
 function targetWordCount(){
-  return Math.round((getSavedWpm() || DEFAULT_WPM) * TARGET_MINUTES);
+  return Math.round(WPM * TARGET_MINUTES);
 }
 // Counts only the words that will actually get spoken on camera: plain
 // script paragraphs, not image blocks — a caption under an image is a
@@ -391,12 +383,16 @@ function countScriptWords(editorEl){
   const m = text.match(/\S+/g);
   return m ? m.length : 0;
 }
+function formatClock(ms){
+  const totalSec = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(totalSec/60), s = totalSec % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
 function updateWordCountBar(editorEl){
   const textEl = document.getElementById('wordcountText');
   if(!textEl) return;
   const count = countScriptWords(editorEl);
   const target = targetWordCount();
-  const wpm = getSavedWpm();
   // ±10% band around the target reads as "on pace" — nobody hits an exact
   // word count while talking naturally, and a hard cutoff would nag over
   // nothing.
@@ -405,96 +401,8 @@ function updateWordCountBar(editorEl){
   let status = 'neutral';
   if(count > 0) status = (count >= low && count <= high) ? 'ok' : (count < low ? 'low' : 'high');
   textEl.className = 'wordcount-text status-' + status;
-  const targetLabel = '~' + target + (wpm ? '' : ' (estimate)');
-  textEl.textContent = count + ' word' + (count===1 ? '' : 's') + ' · target ' + targetLabel + ' for ' + TARGET_MINUTES + ':00';
-  const calibBtn = document.getElementById('calibrateBtn');
-  if(calibBtn) calibBtn.textContent = wpm ? ('Recalibrate (' + Math.round(wpm) + ' wpm)') : 'Find my speaking pace';
-}
-
-function formatClock(ms){
-  const totalSec = Math.max(0, Math.floor(ms/1000));
-  const m = Math.floor(totalSec/60), s = totalSec % 60;
-  return m + ':' + String(s).padStart(2,'0');
-}
-
-// A fixed, known-length paragraph to read aloud, rather than timing
-// whatever's currently in the script (which might be empty, or change
-// mid-read) — the sample's own word count is what the timed read divides
-// by, so its exact wording doesn't matter, only that it's natural to speak.
-const PACE_SAMPLE_TEXT = "Here's something most people don't realize about how our brains handle decisions. Every single day, you make thousands of tiny choices without even noticing them — what to eat, which route to take, whether to answer a text right away. Most of that happens on autopilot, built from habits you formed years ago. But the moment something feels new or risky, your brain switches gears completely. It slows down, pulls in more information, and starts weighing options on purpose. That shift from autopilot to deliberate thinking is actually why change feels so exhausting at first, even when it's a change you genuinely want to make.";
-
-function closePaceCalibration(){
-  const existing = document.getElementById('paceCalibOverlay');
-  if(existing) existing.remove();
-}
-
-function openPaceCalibration(){
-  closePaceCalibration();
-  const sampleWords = (PACE_SAMPLE_TEXT.match(/\S+/g) || []).length;
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay open';
-  overlay.id = 'paceCalibOverlay';
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.style.maxWidth = '480px';
-  overlay.appendChild(modal);
-
-  let running = false, startTime = 0, elapsedMs = 0, timerInterval = null;
-
-  function render(){
-    let resultHtml = '';
-    let actionsHtml = '';
-    if(elapsedMs > 0 && !running){
-      const wpm = sampleWords / (elapsedMs/60000);
-      const roundedWpm = Math.round(wpm);
-      const impliedTarget = Math.round(wpm * TARGET_MINUTES);
-      resultHtml = '<div class="banner done">Your pace: ~' + roundedWpm + ' words per minute → about ' + impliedTarget + ' words for a ' + TARGET_MINUTES + '-minute script.</div>';
-      actionsHtml = '<div class="modal-actions"><div class="left"><button class="ghost" id="calibRetry">Try again</button></div><button class="primary" id="calibSave">Save this pace</button></div>';
-    } else {
-      actionsHtml = '<div class="modal-actions"><div class="left"><button class="ghost" id="calibCancel">Cancel</button></div><button class="primary" id="calibToggle">' + (running ? 'Stop' : 'Start') + '</button></div>';
-    }
-    modal.innerHTML =
-      '<h2>Find your speaking pace</h2>' +
-      '<p class="note" style="margin-bottom:12px;">Read the paragraph below out loud at your normal talking pace — the way you\'d actually talk in a video. Tap Start right before you begin, Stop the instant you finish.</p>' +
-      '<div class="calib-sample">' + escapeHtml(PACE_SAMPLE_TEXT) + '</div>' +
-      '<div class="calib-timer" id="calibTimer">' + formatClock(running ? (Date.now()-startTime) : elapsedMs) + '</div>' +
-      resultHtml + actionsHtml;
-
-    const cancelBtn = document.getElementById('calibCancel');
-    if(cancelBtn) cancelBtn.onclick = closePaceCalibration;
-    const toggleBtn = document.getElementById('calibToggle');
-    if(toggleBtn) toggleBtn.onclick = ()=>{
-      if(!running){
-        running = true; startTime = Date.now(); elapsedMs = 0;
-        render();
-        timerInterval = setInterval(()=>{
-          const el = document.getElementById('calibTimer');
-          if(el) el.textContent = formatClock(Date.now() - startTime);
-        }, 200);
-      } else {
-        running = false;
-        elapsedMs = Date.now() - startTime;
-        clearInterval(timerInterval);
-        render();
-      }
-    };
-    const retryBtn = document.getElementById('calibRetry');
-    if(retryBtn) retryBtn.onclick = ()=>{ elapsedMs = 0; render(); };
-    const saveBtn = document.getElementById('calibSave');
-    if(saveBtn) saveBtn.onclick = ()=>{
-      const wpm = sampleWords / (elapsedMs/60000);
-      localStorage.setItem(WPM_KEY, String(wpm));
-      closePaceCalibration();
-      const editorEl = document.getElementById('scriptEditor');
-      if(editorEl) updateWordCountBar(editorEl);
-    };
-  }
-  // Append to the document before the first render() call — render() looks
-  // elements up with document.getElementById, which finds nothing in a
-  // subtree that isn't attached yet, silently leaving the very first
-  // Start button with no click handler bound.
-  document.body.appendChild(overlay);
-  render();
+  const estMs = (count / WPM) * 60000;
+  textEl.textContent = count + ' word' + (count===1 ? '' : 's') + '. Est ' + formatClock(estMs) + ' · target ~' + target + ' for ' + TARGET_MINUTES + ':00';
 }
 function triggerTypingUndo(){
   const fallback = document.getElementById('scriptEditor');
@@ -1764,7 +1672,7 @@ function renderModal(){
     '<div class="field"><label>Script</label>' +
       '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
       '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
-      '<div class="wordcount-bar"><span class="wordcount-text" id="wordcountText">0 words</span><button class="small-btn" type="button" id="calibrateBtn">Find my speaking pace</button></div>' +
+      '<div class="wordcount-bar"><span class="wordcount-text" id="wordcountText">0 words</span></div>' +
       orphansHtml +
       '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
         '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
@@ -1789,7 +1697,6 @@ function renderModal(){
     saveToGitHub();
   };
   populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
-  document.getElementById('calibrateBtn').onclick = openPaceCalibration;
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
   document.getElementById('scriptImageInput').onchange = (e)=>{
     insertImagesIntoScript(c, e.target.files);

@@ -6,7 +6,7 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "![](data/images/cwmihqah-1788013236533-38vp.jpg)\n\n![](data/images/cwmihqah-1788013238685-pa34.jpg)",
+      "script": "![](data/images/cwmihqah-1788013451578-ei0v.jpg)\n\n![](data/images/cwmihqah-1788013236533-38vp.jpg)\n\n![](data/images/cwmihqah-1788013238685-pa34.jpg)",
       "sources": [],
       "images": [
         {
@@ -14,6 +14,9 @@
         },
         {
           "path": "data/images/cwmihqah-1788013238685-pa34.jpg"
+        },
+        {
+          "path": "data/images/cwmihqah-1788013451578-ei0v.jpg"
         }
       ],
       "baseCaption": "",

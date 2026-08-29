@@ -6,9 +6,16 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "![](data/images/cwmihqah-1788013236533-38vp.jpg)\n\n![](data/images/cwmihqah-1788013238685-pa34.jpg)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cwmihqah-1788013236533-38vp.jpg"
+        },
+        {
+          "path": "data/images/cwmihqah-1788013238685-pa34.jpg"
+        }
+      ],
       "baseCaption": "",
       "platforms": {
         "tiktok": {

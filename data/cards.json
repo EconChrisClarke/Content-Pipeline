@@ -12,7 +12,7 @@
       ],
       "stage": "capture",
       "dead": false,
-      "script": "I have a very low tolerance for liars. We should call them out more.\n\n![](data/images/ccrl0hcj-1788804206669-l5y1.jpg)\n\n![](data/images/ccrl0hcj-1788804209132-qob3.jpg)\n\n![](data/images/ccrl0hcj-1788804211003-efgq.jpg)\n\n![](data/images/ccrl0hcj-1788804212976-b2bt.jpg)\n\n![](data/images/ccrl0hcj-1788804214684-gxbo.jpg)\n\n![](data/images/ccrl0hcj-1788804216670-5ifm.jpg)\n\n![](data/images/ccrl0hcj-1788804218794-va50.jpg)\n\n![](data/images/ccrl0hcj-1788804220662-a9a0.jpg)\n\n![](data/images/ccrl0hcj-1788806373572-pwdw.jpg)\n\n![](data/images/ccrl0hcj-1788807065764-dpyi.png)\n\n![](data/images/ccrl0hcj-1788806377859-5i9y.jpg)\n\n![](data/images/ccrl0hcj-1788807042272-3120.png)\n\n![](data/images/ccrl0hcj-1788806426661-e5qy.jpg)\n\n![](data/images/ccrl0hcj-1788806428924-9vmz.jpg)\n\n![](data/images/ccrl0hcj-1788807021583-7520.png)\n\n![](data/images/ccrl0hcj-1788806432827-3dje.png)",
+      "script": "I have a very low tolerance for liars. We should call them out more.\n\n![](data/images/ccrl0hcj-1788804206669-l5y1.jpg)\n\n![](data/images/ccrl0hcj-1788804209132-qob3.jpg)\n\n![](data/images/ccrl0hcj-1788804211003-efgq.jpg)\n\n![](data/images/ccrl0hcj-1788804212976-b2bt.jpg)\n\n![](data/images/ccrl0hcj-1788804214684-gxbo.jpg)\n\n![](data/images/ccrl0hcj-1788804216670-5ifm.jpg)\n\n![](data/images/ccrl0hcj-1788804218794-va50.jpg)\n\n![](data/images/ccrl0hcj-1788804220662-a9a0.jpg)\n\n![](data/images/ccrl0hcj-1788807082397-taak.png)\n\n![](data/images/ccrl0hcj-1788807065764-dpyi.png)\n\n![](data/images/ccrl0hcj-1788806377859-5i9y.jpg)\n\n![](data/images/ccrl0hcj-1788807042272-3120.png)\n\n![](data/images/ccrl0hcj-1788806426661-e5qy.jpg)\n\n![](data/images/ccrl0hcj-1788806428924-9vmz.jpg)\n\n![](data/images/ccrl0hcj-1788807021583-7520.png)\n\n![](data/images/ccrl0hcj-1788806432827-3dje.png)",
       "sources": [],
       "images": [
         {
@@ -40,9 +40,6 @@
           "path": "data/images/ccrl0hcj-1788804220662-a9a0.jpg"
         },
         {
-          "path": "data/images/ccrl0hcj-1788806373572-pwdw.jpg"
-        },
-        {
           "path": "data/images/ccrl0hcj-1788806377859-5i9y.jpg"
         },
         {
@@ -62,6 +59,9 @@
         },
         {
           "path": "data/images/ccrl0hcj-1788807065764-dpyi.png"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788807082397-taak.png"
         }
       ],
       "baseCaption": "",

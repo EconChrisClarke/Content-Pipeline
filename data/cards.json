@@ -328,6 +328,55 @@
         }
       },
       "createdAt": "2026-08-27"
+    },
+    {
+      "id": "test-dryrun-001",
+      "title": "DRY RUN TEST \u2014 safe to delete",
+      "subtitle": "Testing the Substack publish pipeline",
+      "tags": [
+        "test",
+        "pipeline-check"
+      ],
+      "stage": "distributing",
+      "dead": false,
+      "script": "## Test Heading\n\nThis is a **bold** word, an *italic* word, and an <u>underlined</u> word (should degrade to plain text in the Substack version, per the underline limitation). Also a [test link](https://example.com).",
+      "sources": [],
+      "images": [],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-09-07"
     }
   ]
 }

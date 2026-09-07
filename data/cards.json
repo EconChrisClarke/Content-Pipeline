@@ -3,12 +3,40 @@
     {
       "id": "ccrl0hcj",
       "title": "Economic Explained and Liars",
-      "tags": [],
+      "tags": [
+        "FactCheck",
+        "Viral",
+        "Lies",
+        "Sensationalism",
+        "Credentials"
+      ],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "I have a very low tolerance for liars. We should call them out more.\n\n![](data/images/ccrl0hcj-1788804206669-l5y1.jpg)\n\n![](data/images/ccrl0hcj-1788804209132-qob3.jpg)\n\n![](data/images/ccrl0hcj-1788804211003-efgq.jpg)\n\n![](data/images/ccrl0hcj-1788804212976-b2bt.jpg)\n\n![](data/images/ccrl0hcj-1788804214684-gxbo.jpg)\n\n![](data/images/ccrl0hcj-1788804216670-5ifm.jpg)\n\n![](data/images/ccrl0hcj-1788804218794-va50.jpg)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/ccrl0hcj-1788804206669-l5y1.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804209132-qob3.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804211003-efgq.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804212976-b2bt.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804214684-gxbo.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804216670-5ifm.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788804218794-va50.jpg"
+        }
+      ],
       "baseCaption": "",
       "platforms": {
         "tiktok": {

@@ -68,6 +68,36 @@ def main():
     st = card["platforms"]["substack"]
 
     try:
+        import requests as _requests
+
+        # python-substack's Api.__init__ creates its requests.Session and
+        # immediately uses it (to resolve the publication) before we'd get a
+        # chance to touch api._session ourselves. Patch Session.__init__
+        # itself so every session — including that internal one — carries
+        # browser-like headers from its very first request. The default
+        # "python-requests/x.y" User-Agent is a well-known trigger for
+        # Cloudflare's bot challenge, which is what blocked the first
+        # dry run (see the Actions log for run #1).
+        _original_session_init = _requests.Session.__init__
+
+        def _patched_session_init(self, *a, **kw):
+            _original_session_init(self, *a, **kw)
+            self.headers.update(
+                {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/131.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": PUBLICATION_URL + "/",
+                    "Origin": PUBLICATION_URL,
+                }
+            )
+
+        _requests.Session.__init__ = _patched_session_init
+
         from substack import Api
 
         api = Api(

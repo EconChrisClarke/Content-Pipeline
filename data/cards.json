@@ -12,7 +12,7 @@
       ],
       "stage": "capture",
       "dead": false,
-      "script": "I have a very low tolerance for liars. We should call them out more.\n\n![](data/images/ccrl0hcj-1788804206669-l5y1.jpg)\n\n![](data/images/ccrl0hcj-1788804209132-qob3.jpg)\n\n![](data/images/ccrl0hcj-1788804211003-efgq.jpg)\n\n![](data/images/ccrl0hcj-1788804212976-b2bt.jpg)\n\n![](data/images/ccrl0hcj-1788804214684-gxbo.jpg)\n\n![](data/images/ccrl0hcj-1788804216670-5ifm.jpg)\n\n![](data/images/ccrl0hcj-1788804218794-va50.jpg)\n\n![](data/images/ccrl0hcj-1788804220662-a9a0.jpg)\n\n![](data/images/ccrl0hcj-1788804222412-im6o.jpg)",
+      "script": "I have a very low tolerance for liars. We should call them out more.\n\n![](data/images/ccrl0hcj-1788804206669-l5y1.jpg)\n\n![](data/images/ccrl0hcj-1788804209132-qob3.jpg)\n\n![](data/images/ccrl0hcj-1788804211003-efgq.jpg)\n\n![](data/images/ccrl0hcj-1788804212976-b2bt.jpg)\n\n![](data/images/ccrl0hcj-1788804214684-gxbo.jpg)\n\n![](data/images/ccrl0hcj-1788804216670-5ifm.jpg)\n\n![](data/images/ccrl0hcj-1788804218794-va50.jpg)\n\n![](data/images/ccrl0hcj-1788804220662-a9a0.jpg)\n\n![](data/images/ccrl0hcj-1788806373572-pwdw.jpg)\n\n![](data/images/ccrl0hcj-1788806376142-6vcn.jpg)\n\n![](data/images/ccrl0hcj-1788806377859-5i9y.jpg)\n\n![](data/images/ccrl0hcj-1788804222412-im6o.jpg)",
       "sources": [],
       "images": [
         {
@@ -41,6 +41,15 @@
         },
         {
           "path": "data/images/ccrl0hcj-1788804222412-im6o.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788806373572-pwdw.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788806376142-6vcn.jpg"
+        },
+        {
+          "path": "data/images/ccrl0hcj-1788806377859-5i9y.jpg"
         }
       ],
       "baseCaption": "",

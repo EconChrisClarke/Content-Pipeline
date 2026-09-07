@@ -1,0 +1,58 @@
+name: Publish to Substack
+
+# Triggered from the Content Pipeline app's "Publish live to Substack" button
+# (after its own in-app confirmation step) via GitHub's workflow_dispatch API.
+# The actual Substack calls happen here, server-side, because browsers won't
+# let JS set a Cookie header and Substack's API isn't CORS-open to arbitrary
+# origins anyway — see content-pipeline-status.md for the full writeup.
+on:
+  workflow_dispatch:
+    inputs:
+      card_id:
+        description: 'Card ID to publish'
+        required: true
+        type: string
+      dry_run:
+        description: 'Create the Substack draft only — do not publish live. For manual testing from the Actions tab; the app itself never sets this.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Pinned exactly — this library talks to Substack's undocumented
+      # internal API, which can change without notice. An unpinned install
+      # risks a silent behavior change breaking publishing with no warning.
+      - name: Install python-substack
+        run: pip install python-substack==0.6.0
+
+      - name: Publish
+        env:
+          SUBSTACK_SESSION_COOKIE: ${{ secrets.SUBSTACK_SESSION_COOKIE }}
+          CARD_ID: ${{ inputs.card_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python .github/scripts/publish_substack.py
+
+      # Runs even if the publish step failed, so a 'publish_failed' status
+      # (written to cards.json by the script's own except-block) still makes
+      # it back to the app for the person to see, instead of the card being
+      # left silently stuck on "Publishing…" forever.
+      - name: Commit status back to cards.json
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/cards.json
+          git diff --staged --quiet || git commit -m "Substack publish result for card ${{ inputs.card_id }}"
+          git push

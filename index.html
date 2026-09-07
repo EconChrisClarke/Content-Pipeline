@@ -6,30 +6,36 @@
 <title>Content Pipeline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Palette and type match Christopher's econ-chart-style house brand:
+     brand red #C71E1D, navy/amber/teal/plum as the series colors, the
+     "house rose" #FFF1F2 background, Fraunces for display type, Inter for
+     body. --danger deliberately stays its own color rather than reusing
+     brand red — the style spec is explicit that the red is a neutral brand
+     mark, not a "bad" signal, so true error states need a color of their own. */
   :root{
-    --paper:#efe8da; --surface:#fffcf5; --ink:#25241d; --ink-soft:#716b58;
-    --line:#ddd2b8; --accent:#1f5f5b; --accent-soft:#dcebe8;
-    --gold:#a9762e; --gold-soft:#f2e6cf; --danger:#a13d2e; --danger-soft:#f5ddd6;
-    --stage-capture:#8a8471; --stage-research:#a9762e; --stage-scripted:#1f5f5b; --stage-dist:#8c3f34;
-    --font-display:'Source Serif 4', Georgia, 'Times New Roman', serif;
-    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --paper:#fff1f2; --surface:#ffffff; --ink:#111827; --ink-soft:#6b7280;
+    --line:#e4d8db; --accent:#c71e1d; --accent-soft:#f2e5e7;
+    --gold:#e8a33d; --gold-soft:#fcf1e2; --danger:#a13d2e; --danger-soft:#f5ddd6;
+    --stage-capture:#6b7280; --stage-scripted:#2e8b7a; --stage-dist:#1b3a5c;
+    --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --paper:#1c1b16; --surface:#252420; --ink:#eae4d3; --ink-soft:#a39c86;
-      --line:#3c392e; --accent:#57bcb1; --accent-soft:#203431;
-      --gold:#d9a856; --gold-soft:#332711; --danger:#e0836f; --danger-soft:#3a231e;
-      --stage-capture:#a39c86; --stage-research:#d9a856; --stage-scripted:#57bcb1; --stage-dist:#d98a7a;
+      --paper:#1b1615; --surface:#241c1a; --ink:#f2e8e6; --ink-soft:#b9a9a5;
+      --line:#3a2d2a; --accent:#ef5b52; --accent-soft:#3a201d;
+      --gold:#f0b968; --gold-soft:#3a2c15; --danger:#e0836f; --danger-soft:#3a231e;
+      --stage-capture:#b9a9a5; --stage-scripted:#5fc2ae; --stage-dist:#6f93bd;
     }
   }
   :root[data-theme="dark"]{
-    --paper:#1c1b16; --surface:#252420; --ink:#eae4d3; --ink-soft:#a39c86;
-    --line:#3c392e; --accent:#57bcb1; --accent-soft:#203431;
-    --gold:#d9a856; --gold-soft:#332711; --danger:#e0836f; --danger-soft:#3a231e;
-    --stage-capture:#a39c86; --stage-research:#d9a856; --stage-scripted:#57bcb1; --stage-dist:#d98a7a;
+    --paper:#1b1615; --surface:#241c1a; --ink:#f2e8e6; --ink-soft:#b9a9a5;
+    --line:#3a2d2a; --accent:#ef5b52; --accent-soft:#3a201d;
+    --gold:#f0b968; --gold-soft:#3a2c15; --danger:#e0836f; --danger-soft:#3a231e;
+    --stage-capture:#b9a9a5; --stage-scripted:#5fc2ae; --stage-dist:#6f93bd;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
@@ -45,6 +51,9 @@
   .searchbox{flex:1 1 200px;min-width:160px;}
   .searchbox input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .tagfilter{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .tag-search-input{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12px;font-family:var(--font-body);background:var(--paper);color:var(--ink);min-width:110px;flex:0 1 140px;}
+  .chip-more{background:transparent;border-style:dashed;cursor:pointer;font-style:italic;}
+  .chip-more:hover{background:var(--accent-soft);}
   .chip{border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);border-radius:999px;padding:4px 11px;font-size:12px;cursor:pointer;user-select:none;}
   .chip.active{background:var(--accent);color:var(--surface);border-color:var(--accent);}
   .spacer{flex:1;}
@@ -56,13 +65,12 @@
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px 14px;font-size:13px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
   button.ghost:hover{background:var(--accent-soft);}
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .chip:focus-visible, .card:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
-  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 26px;align-items:start;}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px 26px;align-items:start;}
   @media (max-width:1000px){.board{grid-template-columns:1fr 1fr;}}
   @media (max-width:600px){.board{grid-template-columns:1fr;}}
   .col{background:var(--surface);border-radius:4px;padding:12px 11px;min-height:120px;border-top:3px solid var(--stage-capture);}
-  .col:nth-of-type(2){border-top-color:var(--stage-research);}
-  .col:nth-of-type(3){border-top-color:var(--stage-scripted);}
-  .col:nth-of-type(4){border-top-color:var(--stage-dist);}
+  .col:nth-of-type(2){border-top-color:var(--stage-scripted);}
+  .col:nth-of-type(3){border-top-color:var(--stage-dist);}
   .col h2{font-family:var(--font-display);font-weight:600;font-size:14.5px;margin:2px 3px 12px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;}
   .col h2 span.count{font-family:var(--font-mono);color:var(--ink-soft);font-weight:500;font-variant-numeric:tabular-nums;font-size:12px;}
   .card{background:var(--paper);border-radius:5px;padding:11px 12px;margin-bottom:9px;cursor:pointer;border:1px solid var(--line);}
@@ -126,6 +134,12 @@
   .script-editor p{margin:0 0 10px;}
   .script-editor p:last-child{margin-bottom:0;}
   .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
+  .script-editor h1, .script-editor h2, .script-editor h3{font-family:var(--font-display);font-weight:700;line-height:1.25;margin:14px 0 8px;color:var(--ink);}
+  .script-editor h1:first-child, .script-editor h2:first-child, .script-editor h3:first-child{margin-top:0;}
+  .script-editor h1{font-size:1.55em;}
+  .script-editor h2{font-size:1.32em;}
+  .script-editor h3{font-size:1.14em;}
+  .heading-select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
   /* Extra-specific selector (three classes) needed to outrank the generic
      ".field input[type=text]" rule above, which would otherwise paint this
@@ -144,6 +158,7 @@
   .selection-toolbar{position:fixed;z-index:31;display:flex;gap:2px;background:var(--ink);border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.32);}
   .selection-toolbar-btn{background:none;border:none;color:var(--paper);border-radius:5px;padding:6px 10px;font-size:14px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
   .selection-toolbar-btn:hover{background:rgba(255,255,255,.15);}
+  .selection-toolbar-btn.active{background:rgba(255,255,255,.28);}
   .link-popover{position:fixed;z-index:32;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
   .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .link-popover button{padding:7px 11px;}
@@ -161,6 +176,9 @@
   .crophandle.se{right:-12px;bottom:-12px;cursor:nwse-resize;}
   .orphan-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
   .orphan-row img{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0;}
+  .cover-image-preview{display:flex;gap:10px;align-items:center;margin-bottom:4px;}
+  .cover-image-preview img{width:100px;height:66px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex-shrink:0;}
+  .cover-image-actions{display:flex;gap:6px;flex-wrap:wrap;}
   /* Word count sits directly under the script box (not down in the general
      toolbar row) specifically so it's visible without scrolling while
      writing — that's the whole point of the feature. */
@@ -177,7 +195,7 @@
     <div class="titlerow">
       <div>
         <h1>Content Pipeline</h1>
-        <p>Capture &rarr; Researching &rarr; Scripted &amp; Filmed &rarr; Distributing &mdash; one board, no folders, tags for topics.</p>
+        <p>Capture &rarr; Scripted &amp; Filmed &rarr; Distributing &mdash; one board, no folders, tags for topics.</p>
       </div>
       <button class="ghost" id="settingsBtn">Settings</button>
     </div>
@@ -190,6 +208,7 @@
       <button class="primary" id="quickAdd">Add</button>
     </div>
     <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, sources&hellip;"></div>
+    <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Filter tags&hellip;">
     <div class="tagfilter" id="tagfilter"></div>
     <div class="spacer"></div>
     <button class="ghost" id="clearFilter">Clear filters</button>
@@ -206,15 +225,26 @@
   <div class="overlay" id="cropOverlay-el" style="z-index:35;">
     <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
   </div>
+  <div class="overlay" id="substackConfirmOverlay-el" style="z-index:36;">
+    <div class="modal" id="substackConfirmModal-el" style="max-width:560px;"></div>
+  </div>
 </div>
 
 <script>
 const STAGES = [
   {key:'capture', label:'Capture'},
-  {key:'researching', label:'Researching'},
   {key:'scripted', label:'Scripted & Filmed'},
   {key:'distributing', label:'Distributing'}
 ];
+
+// Cards saved back when the board had a 'researching' stage need to land
+// somewhere now that the column is gone — migrated forward to 'scripted'
+// rather than back to 'capture', since reaching the researching stage meant
+// the idea had already moved past the raw-idea pile.
+function migrateLegacyStages(cards){
+  (cards||[]).forEach(c=>{ if(c.stage === 'researching') c.stage = 'scripted'; });
+  return cards;
+}
 
 const PLATFORMS = [
   {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
@@ -314,7 +344,7 @@ function setSyncStatus(mode, text){
 function loadFallbackCards(){
   try{
     const raw = localStorage.getItem(LS_FALLBACK_KEY);
-    if(raw){ const p = JSON.parse(raw); if(Array.isArray(p)) return p; }
+    if(raw){ const p = JSON.parse(raw); if(Array.isArray(p)) return migrateLegacyStages(p); }
   }catch(e){}
   return [];
 }
@@ -408,6 +438,14 @@ function updateWordCountBar(editorEl){
   const estMs = (count / WPM) * 60000;
   textEl.textContent = count + ' word' + (count===1 ? '' : 's') + '. Est ' + formatClock(estMs) + ' · target ~' + target + ' for ' + TARGET_MINUTES + ':00';
 }
+function updateHeadingSelectState(){
+  const sel = document.getElementById('headingSelect');
+  if(!sel) return;
+  let block = 'p';
+  try{ block = (document.queryCommandValue('formatBlock') || 'p').toLowerCase(); }catch(e){}
+  sel.value = ['h1','h2','h3'].includes(block) ? block.toUpperCase() : 'P';
+}
+
 function triggerTypingUndo(){
   const fallback = document.getElementById('scriptEditor');
   const target = (lastFocusedEditable && document.body.contains(lastFocusedEditable)) ? lastFocusedEditable : fallback;
@@ -421,7 +459,7 @@ async function loadFromGitHub(){
     const file = await ghGetFile(DATA_PATH);
     if(file){
       const json = JSON.parse(b64DecodeUnicode(file.content));
-      state.cards = Array.isArray(json.cards) ? json.cards : [];
+      state.cards = migrateLegacyStages(Array.isArray(json.cards) ? json.cards : []);
       cardsSha = file.sha;
     } else {
       // no data file yet - this is a brand new repo, start empty and create it on first save
@@ -493,7 +531,7 @@ async function connectAndMerge(){
     }
     const byId = new Map(remoteCards.map(c=>[c.id, c]));
     localCards.forEach(c=>byId.set(c.id, c)); // local wins on id collision
-    state.cards = [...byId.values()];
+    state.cards = migrateLegacyStages([...byId.values()]);
     syncEnabled = true;
     await saveToGitHub(); // push the merged result so GitHub matches what's on screen
   }catch(err){
@@ -566,12 +604,14 @@ function makeCard(overrides){
   return Object.assign({
     id: 'c'+Math.random().toString(36).slice(2,9),
     title: 'Untitled idea',
+    subtitle: '',
     tags: [],
     stage: 'capture',
     dead: false,
     script: '',
     sources: [],
     images: [],
+    coverImage: null,
     baseCaption: '',
     platforms: newPlatformState(),
     createdAt: new Date().toISOString().slice(0,10)
@@ -609,10 +649,35 @@ function cardMatchesFilter(c){
 
 // ---- rendering ----
 
+// A tag list grows without bound over the life of the board, so the chip row
+// can't just show every tag forever — it would eventually crowd out the
+// board itself. Two things keep it bounded: a small search box that narrows
+// the chips shown to a typed substring, and (when not searching) a cap at
+// TAG_LIMIT chips, most-used first, with a "+N more" toggle to see the rest.
+// An already-active filter chip is always kept visible even under a search,
+// so applying a filter can never make its own chip disappear.
+let tagFilterQuery = '';
+let tagFilterExpanded = false;
+const TAG_LIMIT = 12;
+
+function tagUseCounts(){
+  const counts = {};
+  state.cards.forEach(c=>c.tags.forEach(t=>{ counts[t] = (counts[t]||0) + 1; }));
+  return counts;
+}
+
 function renderTagFilter(){
   const el = document.getElementById('tagfilter');
   el.innerHTML = '';
-  allTags().forEach(t=>{
+  const counts = tagUseCounts();
+  const q = tagFilterQuery.trim().toLowerCase();
+  let tags = allTags();
+  if(q) tags = tags.filter(t => t.toLowerCase().includes(q) || activeFilters.has(t));
+  tags.sort((a,b) => (counts[b]-counts[a]) || a.localeCompare(b));
+  const overflow = !tagFilterExpanded && !q && tags.length > TAG_LIMIT;
+  const shown = overflow ? tags.slice(0, TAG_LIMIT) : tags;
+
+  shown.forEach(t=>{
     const chip = document.createElement('div');
     chip.className = 'chip' + (activeFilters.has(t) ? ' active' : '');
     chip.textContent = t;
@@ -624,6 +689,20 @@ function renderTagFilter(){
     };
     el.appendChild(chip);
   });
+
+  if(overflow){
+    const more = document.createElement('div');
+    more.className = 'chip chip-more';
+    more.textContent = '+' + (tags.length - TAG_LIMIT) + ' more';
+    more.onclick = ()=>{ tagFilterExpanded = true; render(); };
+    el.appendChild(more);
+  } else if(tagFilterExpanded && !q && tags.length > TAG_LIMIT){
+    const less = document.createElement('div');
+    less.className = 'chip chip-more';
+    less.textContent = 'Show fewer';
+    less.onclick = ()=>{ tagFilterExpanded = false; render(); };
+    el.appendChild(less);
+  }
 }
 
 function escapeHtml(s){
@@ -679,8 +758,13 @@ document.getElementById('archiveToggle').onclick = ()=>{
   const a = document.getElementById('archive');
   a.style.display = a.style.display==='none' ? 'block' : 'none';
 };
-document.getElementById('clearFilter').onclick = ()=>{ activeFilters.clear(); searchQuery=''; document.getElementById('searchInput').value=''; render(); };
+document.getElementById('clearFilter').onclick = ()=>{
+  activeFilters.clear(); searchQuery=''; tagFilterQuery=''; tagFilterExpanded=false;
+  document.getElementById('searchInput').value=''; document.getElementById('tagSearchInput').value='';
+  render();
+};
 document.getElementById('searchInput').addEventListener('input', e=>{ searchQuery = e.target.value; render(); });
+document.getElementById('tagSearchInput').addEventListener('input', e=>{ tagFilterQuery = e.target.value; tagFilterExpanded = false; render(); });
 
 document.getElementById('quickAdd').onclick = quickAdd;
 document.getElementById('quickInput').addEventListener('keydown', e=>{ if(e.key==='Enter') quickAdd(); });
@@ -714,15 +798,118 @@ function generateSubstackDraft(card){
   // draft just uses it as-is instead of re-chunking it into sentences,
   // which would otherwise scramble the image placement.
   let draft = '# ' + card.title + '\n\n';
+  if(card.subtitle) draft += '*' + card.subtitle + '*\n\n';
   draft += (card.script||'').trim() || '(No script text yet — write the script first, then regenerate.)';
   if(card.sources.length){
     draft += '\n\n---\n**Sources**\n';
     card.sources.forEach(s=>{ draft += '- [' + (s.label||s.url) + '](' + s.url + ')\n'; });
   }
-  if(card.tags.length){
-    draft += '\n*Topics: ' + card.tags.join(', ') + '*';
-  }
   return draft;
+}
+
+// ---- live Substack publish (via a GitHub Actions workflow relay) ----
+// The browser can't do this directly: fetch()/XHR are barred from ever
+// setting a Cookie header, and Substack's endpoints aren't CORS-open to
+// third-party origins anyway. So the actual Substack API call happens
+// server-side in a GitHub Actions workflow (publish-substack.yml) that reads
+// the SUBSTACK_SESSION_COOKIE repo secret; this app only ever talks to
+// GitHub's own API, which is what it already does for everything else.
+const PUBLISH_WORKFLOW_FILE = 'publish-substack.yml';
+const PUBLICATION_URL = 'https://econchrisclarke.substack.com/';
+
+function openSubstackConfirm(card){
+  const modal = document.getElementById('substackConfirmModal-el');
+  const coverHtml = card.coverImage
+    ? '<img src="'+escapeHtml(imgSrc(card.coverImage.path))+'" style="max-width:100%;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;display:block;">'
+    : '';
+  const previewText = (card.script||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*_]|<\/?u>/g,'').replace(/\s+/g,' ').trim().slice(0, 300);
+  modal.innerHTML =
+    '<h2>Publish to Substack?</h2>' +
+    '<div class="banner bad">This publishes live to <strong>'+PUBLICATION_URL+'</strong> and emails every subscriber immediately. There\'s no undo from here — you\'d need to unpublish/delete it manually in Substack afterward.</div>' +
+    coverHtml +
+    '<div style="font-family:var(--font-display);font-weight:700;font-size:1.2em;margin-bottom:2px;">'+escapeHtml(card.title)+'</div>' +
+    (card.subtitle ? '<div style="color:var(--ink-soft);margin-bottom:10px;">'+escapeHtml(card.subtitle)+'</div>' : '') +
+    '<div class="note" style="margin-bottom:14px;">'+escapeHtml(previewText)+(card.script && card.script.length>300 ? '…' : '')+'</div>' +
+    (card.tags.length ? '<div class="note">Tags: '+card.tags.map(escapeHtml).join(', ')+'</div>' : '') +
+    '<div class="note">Audience: everyone (free)</div>' +
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="substackConfirmCancel">Cancel</button></div>' +
+      '<button class="primary" id="substackConfirmGo" style="background:var(--danger);">Yes, publish now</button></div>';
+  document.getElementById('substackConfirmOverlay-el').classList.add('open');
+  document.getElementById('substackConfirmCancel').onclick = closeSubstackConfirm;
+  document.getElementById('substackConfirmGo').onclick = ()=> triggerSubstackPublish(card);
+}
+function closeSubstackConfirm(){
+  document.getElementById('substackConfirmOverlay-el').classList.remove('open');
+}
+
+async function triggerSubstackPublish(card){
+  closeSubstackConfirm();
+  if(!syncEnabled || !ghConfig){
+    setSyncStatus('bad', 'Connect to GitHub in Settings before publishing.');
+    return;
+  }
+  card.platforms.substack.status = 'publishing';
+  if(openCardId===card.id) renderModal();
+  setSyncStatus('', 'Triggering Substack publish…');
+  try{
+    const url = 'https://api.github.com/repos/'+ghConfig.owner+'/'+ghConfig.repo+'/actions/workflows/'+PUBLISH_WORKFLOW_FILE+'/dispatches';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()),
+      body: JSON.stringify({ref: ghConfig.branch, inputs: {card_id: card.id}})
+    });
+    if(!res.ok){
+      const text = await res.text();
+      throw {code:'http_'+res.status, message:text};
+    }
+    setSyncStatus('', 'Publishing to Substack — this can take up to a minute…');
+    pollSubstackPublishStatus(card.id, 0);
+  }catch(err){
+    card.platforms.substack.status = 'not_started';
+    if(openCardId===card.id) renderModal();
+    setSyncStatus('bad', "Couldn't trigger the Substack publish workflow — check the GitHub token has Actions permission in Settings.");
+  }
+}
+
+// The workflow_dispatch API is fire-and-forget (no run id returned), so we
+// poll the saved cards.json itself — the workflow writes the result (status
+// + published link, or a failure marker) straight back to the card when it
+// finishes. Local edits made to other fields while this is running are
+// preserved; only the substack platform status/link are pulled from remote.
+async function pollSubstackPublishStatus(cardId, attempt){
+  const MAX_ATTEMPTS = 20; // ~20 * 4s = 80s
+  if(attempt >= MAX_ATTEMPTS){
+    setSyncStatus('bad', 'Still working — check the Actions tab on GitHub for progress: github.com/'+ghConfig.owner+'/'+ghConfig.repo+'/actions');
+    return;
+  }
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      const cards = Array.isArray(json.cards) ? json.cards : [];
+      const remote = cards.find(c=>c.id===cardId);
+      const remoteSt = remote && remote.platforms && remote.platforms.substack;
+      if(remoteSt && remoteSt.status === 'published'){
+        const local = state.cards.find(c=>c.id===cardId);
+        if(local){
+          local.platforms.substack.status = 'published';
+          local.platforms.substack.link = remoteSt.link;
+          if(openCardId===cardId) renderModal();
+        }
+        cardsSha = file.sha;
+        setSyncStatus('ok', 'Published to Substack: ' + remoteSt.link);
+        render();
+        return;
+      }
+      if(remoteSt && remoteSt.status === 'publish_failed'){
+        const local = state.cards.find(c=>c.id===cardId);
+        if(local){ local.platforms.substack.status = 'not_started'; if(openCardId===cardId) renderModal(); }
+        setSyncStatus('bad', 'Substack publish failed — check the Actions tab on GitHub for details: github.com/'+ghConfig.owner+'/'+ghConfig.repo+'/actions');
+        return;
+      }
+    }
+  }catch(err){ /* transient read failure — keep polling */ }
+  setTimeout(()=>pollSubstackPublishStatus(cardId, attempt+1), 4000);
 }
 
 function trimToLimit(text, limit){
@@ -997,6 +1184,21 @@ function showSelectionToolbar(rect, range, editableRoot){
     }
     closeSelectionToolbar();
   }));
+  const applyFormat = (cmd)=>{ restoreSelection(); document.execCommand(cmd); closeSelectionToolbar(); };
+  const boldBtn = mk('B', 'Bold', ()=>applyFormat('bold'));
+  boldBtn.style.fontWeight = '800';
+  const italicBtn = mk('I', 'Italic', ()=>applyFormat('italic'));
+  italicBtn.style.fontStyle = 'italic';
+  const underlineBtn = mk('U', 'Underline', ()=>applyFormat('underline'));
+  underlineBtn.style.textDecoration = 'underline';
+  // Reflect whether the current selection is already bold/italic/underlined —
+  // a quick glance tells you what you'd be toggling before you tap it.
+  try{ if(document.queryCommandState('bold')) boldBtn.classList.add('active'); }catch(e){}
+  try{ if(document.queryCommandState('italic')) italicBtn.classList.add('active'); }catch(e){}
+  try{ if(document.queryCommandState('underline')) underlineBtn.classList.add('active'); }catch(e){}
+  bar.appendChild(boldBtn);
+  bar.appendChild(italicBtn);
+  bar.appendChild(underlineBtn);
   bar.appendChild(mk('🔍', 'Search the web', ()=>{
     window.open('https://www.google.com/search?q=' + encodeURIComponent(selectedText), '_blank', 'noopener');
     closeSelectionToolbar();
@@ -1102,7 +1304,7 @@ function buildImageNode(card, path, caption){
   cap.contentEditable = 'true';
   cap.className = 'imgcaption';
   cap.dataset.placeholder = 'Add a caption…';
-  if(caption) appendLineWithLinks(cap, caption);
+  if(caption) appendInlineMarkdown(cap, caption);
   cap.addEventListener('keydown', (e)=>{
     if(e.key === 'Enter'){ e.preventDefault(); cap.blur(); } // single-line: Enter confirms instead of adding a line break
   });
@@ -1168,6 +1370,40 @@ function closeImageMenu(){
   if(existing) existing.remove();
   if(closeImageMenuHandler){ document.removeEventListener('pointerdown', closeImageMenuHandler, true); closeImageMenuHandler = null; }
 }
+// Copies an inline image to the system clipboard as a real image (not a
+// link or a file), so images kept in a card can be pasted straight into any
+// other app — Notes, Slack, an email, a slide. Always re-encodes to PNG via
+// a canvas rather than copying the original bytes verbatim: the Clipboard
+// API's image support is only broadly guaranteed for image/png across
+// browsers, so a JPEG/GIF/WebP source needs converting to paste reliably
+// everywhere. Images on this page are always same-origin (served relative
+// to the Pages site) or session-local blob: URLs, so drawing them to canvas
+// never taints it.
+async function copyImageToClipboard(path){
+  if(!navigator.clipboard || !window.ClipboardItem){
+    setSyncStatus('bad', "This browser doesn't support copying images to the clipboard.");
+    return;
+  }
+  try{
+    const img = new Image();
+    await new Promise((resolve, reject)=>{
+      img.onload = resolve;
+      img.onerror = ()=>reject(new Error('image load failed'));
+      img.src = imgSrc(path);
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    const blob = await new Promise(resolve=>canvas.toBlob(resolve, 'image/png'));
+    if(!blob) throw new Error('canvas export failed');
+    await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+    setSyncStatus('ok', 'Image copied — paste it anywhere.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy the image — try again, or use your browser's own \"Copy image\" option on it.");
+  }
+}
+
 function showImageMenu(wrap, card, path){
   closeImageMenu();
   const menu = document.createElement('div');
@@ -1179,6 +1415,7 @@ function showImageMenu(wrap, card, path){
     b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); closeImageMenu(); fn(); };
     return b;
   };
+  menu.appendChild(mkBtn('⧉ Copy', 'Copy image to clipboard', ()=>copyImageToClipboard(path)));
   menu.appendChild(mkBtn('↑', 'Move up', ()=>moveImageBlock(card, wrap, -1)));
   menu.appendChild(mkBtn('↓', 'Move down', ()=>moveImageBlock(card, wrap, 1)));
   menu.appendChild(mkBtn('✂ Crop', 'Crop image', ()=>openCropper(card, path, wrap)));
@@ -1394,6 +1631,14 @@ function ensureImageSpacers(editorEl){
   }
 }
 
+// A block starting with 1-3 '#' + a space is a heading (Substack/markdown
+// convention — matches how the Substack draft generator already ships the
+// script text verbatim). Only the block's first line is checked; any further
+// lines in the same block (rare — Enter inside a heading normally starts a
+// new block) still ride along inside the same heading element via <br>, the
+// same way multi-line paragraphs already work.
+const HEADER_LINE_RE = /^(#{1,3})\s+([^\n]*)/;
+
 function populateScriptEditor(editorEl, script, card){
   editorEl.innerHTML = '';
   const blocks = (script || '').split(/\n{2,}/);
@@ -1402,59 +1647,128 @@ function populateScriptEditor(editorEl, script, card){
     if(!trimmed) return;
     if(isImageLine(trimmed)){
       editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed)));
-    } else {
-      const p = document.createElement('p');
-      trimmed.split('\n').forEach((line,idx)=>{
-        if(idx>0) p.appendChild(document.createElement('br'));
-        appendLineWithLinks(p, line);
-      });
-      editorEl.appendChild(p);
+      return;
     }
+    const headerMatch = HEADER_LINE_RE.exec(trimmed);
+    if(headerMatch){
+      const h = document.createElement('h' + headerMatch[1].length);
+      const rest = trimmed.slice(headerMatch[0].length);
+      appendInlineMarkdown(h, headerMatch[2]);
+      if(rest.startsWith('\n')){
+        rest.slice(1).split('\n').forEach(line=>{
+          h.appendChild(document.createElement('br'));
+          appendInlineMarkdown(h, line);
+        });
+      }
+      editorEl.appendChild(h);
+      return;
+    }
+    const p = document.createElement('p');
+    trimmed.split('\n').forEach((line,idx)=>{
+      if(idx>0) p.appendChild(document.createElement('br'));
+      appendInlineMarkdown(p, line);
+    });
+    editorEl.appendChild(p);
   });
   ensureImageSpacers(editorEl);
   updateWordCountBar(editorEl);
 }
 
-// A hyperlink typed/added inside the script text is stored as an ordinary
-// markdown link — [label](url) — right in the paragraph text, the same way
-// images and sources already ride along as markdown. appendLineWithLinks
-// turns that back into a real <a class="scriptlink"> when the editor is
-// (re)populated; the reverse direction lives in serializeScriptEditor below.
-function appendLineWithLinks(parent, line){
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let lastIndex = 0, m, any = false;
-  while((m = re.exec(line))){
-    any = true;
-    if(m.index > lastIndex) parent.appendChild(document.createTextNode(line.slice(lastIndex, m.index)));
-    const a = document.createElement('a');
-    a.className = 'scriptlink';
-    a.href = m[2];
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.textContent = m[1];
-    parent.appendChild(a);
-    lastIndex = re.lastIndex;
+// Inline formatting (bold, italic, underline, links) is stored as ordinary
+// markdown/HTML mixed into the plain text — **bold**, *italic*, <u>underline</u>,
+// [label](url) — the same way images and sources already ride along as
+// markdown, so the script stays a single portable string (and drops straight
+// into the Substack draft generator verbatim). appendInlineMarkdown turns
+// that back into real <b>/<i>/<u>/<a class="scriptlink"> elements when the
+// editor is (re)populated, recursing so marks can nest (e.g. a bold link);
+// the reverse direction lives in serializeInlineContent below. Shared by
+// script paragraphs, headings, and image captions alike.
+function appendInlineMarkdown(parent, text){
+  let i = 0;
+  while(i < text.length){
+    if(text.startsWith('**', i)){
+      const end = text.indexOf('**', i+2);
+      if(end !== -1){
+        const b = document.createElement('b');
+        appendInlineMarkdown(b, text.slice(i+2, end));
+        parent.appendChild(b);
+        i = end+2;
+        continue;
+      }
+    }
+    if(text[i] === '*'){
+      const end = text.indexOf('*', i+1);
+      if(end !== -1){
+        const em = document.createElement('i');
+        appendInlineMarkdown(em, text.slice(i+1, end));
+        parent.appendChild(em);
+        i = end+1;
+        continue;
+      }
+    }
+    if(text.startsWith('<u>', i)){
+      const end = text.indexOf('</u>', i+3);
+      if(end !== -1){
+        const u = document.createElement('u');
+        appendInlineMarkdown(u, text.slice(i+3, end));
+        parent.appendChild(u);
+        i = end+4;
+        continue;
+      }
+    }
+    if(text[i] === '['){
+      const closeBracket = text.indexOf(']', i+1);
+      if(closeBracket !== -1 && text[closeBracket+1] === '('){
+        const closeParen = text.indexOf(')', closeBracket+2);
+        if(closeParen !== -1){
+          const a = document.createElement('a');
+          a.className = 'scriptlink';
+          a.href = text.slice(closeBracket+2, closeParen);
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          appendInlineMarkdown(a, text.slice(i+1, closeBracket));
+          parent.appendChild(a);
+          i = closeParen+1;
+          continue;
+        }
+      }
+    }
+    // Plain run: consume up to the next character that could start a marker,
+    // so ordinary text isn't scanned one character at a time.
+    let j = i+1;
+    while(j < text.length && text[j] !== '*' && text[j] !== '[' && !(text[j]==='<' && text.startsWith('<u>', j))) j++;
+    parent.appendChild(document.createTextNode(text.slice(i, j)));
+    i = j;
   }
-  if(!any){ parent.appendChild(document.createTextNode(line)); return; }
-  if(lastIndex < line.length) parent.appendChild(document.createTextNode(line.slice(lastIndex)));
 }
 
-// Shared by script paragraphs and image captions alike — both are just
-// plain text mixed with the occasional <a class="scriptlink">, serialized to
-// the same [label](url) markdown appendLineWithLinks parses back.
+// Recursive so nested marks (bold containing a link, etc.) round-trip
+// correctly. Any element tag not recognized below (e.g. a stray <span>
+// left by the browser) is unwrapped — its text survives, the wrapper doesn't.
 function serializeInlineContent(el){
   let text = '';
   el.childNodes.forEach(n=>{
-    if(n.nodeName === 'BR') text += '\n';
-    else if(n.nodeType === 1 && n.tagName === 'A'){
-      const label = (n.textContent || '').trim();
+    if(n.nodeName === 'BR'){ text += '\n'; return; }
+    if(n.nodeType !== 1){ text += n.textContent || ''; return; }
+    const inner = serializeInlineContent(n);
+    const tag = n.tagName;
+    if(tag === 'A'){
       const href = n.getAttribute('href') || '';
-      text += label ? ('[' + label + '](' + href + ')') : href;
+      text += inner ? ('[' + inner + '](' + href + ')') : href;
+    } else if(tag === 'B' || tag === 'STRONG'){
+      text += inner ? ('**' + inner + '**') : '';
+    } else if(tag === 'I' || tag === 'EM'){
+      text += inner ? ('*' + inner + '*') : '';
+    } else if(tag === 'U'){
+      text += inner ? ('<u>' + inner + '</u>') : '';
+    } else {
+      text += inner;
     }
-    else text += n.textContent || '';
   });
   return text;
 }
+
+const HEADER_PREFIX = {H1:'# ', H2:'## ', H3:'### '};
 
 function serializeScriptEditor(editorEl){
   const parts = [];
@@ -1462,6 +1776,9 @@ function serializeScriptEditor(editorEl){
     if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
       const capEl = node.querySelector('.imgcaption');
       parts.push(scriptImageTag(node.dataset.path, capEl ? serializeInlineContent(capEl).trim() : ''));
+    } else if(node.nodeType===1 && HEADER_PREFIX[node.tagName]){
+      const text = serializeInlineContent(node);
+      if(text.trim()) parts.push(HEADER_PREFIX[node.tagName] + text);
     } else if(node.nodeType===1){
       const text = serializeInlineContent(node);
       if(text.trim()) parts.push(text);
@@ -1597,6 +1914,47 @@ function deleteImageEverywhere(card, path){
   }
 }
 
+// The cover image is a separate single slot from the inline script images —
+// it's the thumbnail Substack (and eventually other platforms) shows for the
+// post, not a paragraph inside the script itself. Uploaded the same way as
+// inline images (GitHub-hosted, with an instant local blob preview so it
+// doesn't show broken while Pages catches up).
+async function setCoverImage(card, file){
+  if(!syncEnabled || !ghConfig){
+    setSyncStatus('bad', 'Connect to GitHub in Settings before uploading images.');
+    return;
+  }
+  const statusEl = document.getElementById('coverImgStatus');
+  if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
+  const oldPath = card.coverImage ? card.coverImage.path : null;
+  try{
+    const base64 = await fileToBase64(file);
+    const ext = safeExt(file.name);
+    const path = 'data/images/' + card.id + '-cover-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
+    localImageBlobs.set(path, URL.createObjectURL(file));
+    await ghPutBinaryFile(path, base64, 'Set cover image for card ' + card.id);
+    card.coverImage = {path};
+    if(statusEl) statusEl.textContent = '';
+    renderModal();
+    saveToGitHub();
+    if(oldPath){
+      ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Replace cover image for card ' + card.id); }).catch(()=>{});
+    }
+  }catch(err){
+    setSyncStatus('bad', 'Cover image upload failed — check your GitHub connection in Settings.');
+  }
+}
+
+function removeCoverImage(card){
+  const oldPath = card.coverImage ? card.coverImage.path : null;
+  card.coverImage = null;
+  renderModal();
+  saveToGitHub();
+  if(oldPath && syncEnabled){
+    ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Remove cover image for card ' + card.id); }).catch(()=>{});
+  }
+}
+
 function renderModal(){
   const c = getCard();
   if(!c) return;
@@ -1635,16 +1993,25 @@ function renderModal(){
     PLATFORMS.forEach(p=>{
       const st = c.platforms[p.key];
       if(p.isSubstack){
+        const publishing = st.status === 'publishing';
+        const coverThumb = c.coverImage
+          ? '<div class="cover-image-preview" style="margin-top:8px;"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><span class="note">Cover image (set above)</span></div>'
+          : '<div class="note" style="margin-top:8px;">No cover image set — add one at the top of this card.</div>';
+        const tagNote = c.tags.length ? '<div class="note">Will post with tags: '+c.tags.map(escapeHtml).join(', ')+'</div>' : '';
         platformsHtml +=
         '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
-          '<select data-plat="'+p.key+'" data-field="status">' +
+          '<select data-plat="'+p.key+'" data-field="status" '+(publishing?'disabled':'')+'>' +
             '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
             '<option value="drafted" '+(st.status==='drafted'?'selected':'')+'>Drafted</option>' +
             '<option value="published" '+(st.status==='published'?'selected':'')+'>Published</option>' +
           '</select></div>' +
-          '<button class="small-btn" id="genSubstack">Generate draft from script + sources</button>' +
+          coverThumb + tagNote +
+          '<button class="small-btn" id="genSubstack" '+(publishing?'disabled':'')+'>Generate draft from script + sources</button>' +
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
           '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          '<button class="primary" id="publishSubstackBtn" style="margin-top:10px;width:100%;background:var(--danger);" '+(publishing?'disabled':'')+'>' +
+            (publishing ? '⏳ Publishing…' : '🚀 Publish live to Substack') +
+          '</button>' +
         '</div>';
       } else {
         const count = st.caption.length;
@@ -1667,6 +2034,14 @@ function renderModal(){
   modal.innerHTML =
     '<h2>Edit idea <span class="stagepill">'+STAGES.find(s=>s.key===c.stage).label+'</span></h2>' +
     '<div class="field"><label>Title</label><input type="text" id="titleInput" value="'+escapeHtml(c.title)+'"></div>' +
+    '<div class="field"><label>Subtitle</label><input type="text" id="subtitleInput" value="'+escapeHtml(c.subtitle||'')+'" placeholder="Optional — shown under the title on Substack"></div>' +
+    '<div class="field"><label>Cover image</label>' +
+      '<input type="file" id="coverImageInput" accept="image/*" style="display:none">' +
+      (c.coverImage
+        ? '<div class="cover-image-preview"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><div class="cover-image-actions"><button class="small-btn" type="button" id="changeCoverBtn">Change</button><button class="small-btn" type="button" id="removeCoverBtn" style="background:var(--danger-soft);color:var(--danger);">Remove</button></div></div>'
+        : '<button class="small-btn" type="button" id="setCoverBtn">🖼 Set cover image</button>') +
+      '<span class="note" id="coverImgStatus"></span>' +
+    '</div>' +
     '<div class="row">' +
       '<div class="field"><label>Stage</label><select id="stageInput">' +
         STAGES.map(s=>'<option value="'+s.key+'" '+(s.key===c.stage?'selected':'')+'>'+s.label+'</option>').join('') +
@@ -1678,9 +2053,17 @@ function renderModal(){
       '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
       '<div class="wordcount-bar"><span class="wordcount-text" id="wordcountText">0 words</span></div>' +
       orphansHtml +
-      '<div class="script-toolbar"><button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
+      '<div class="script-toolbar">' +
+        '<select id="headingSelect" title="Paragraph style" class="heading-select">' +
+          '<option value="P">Normal text</option>' +
+          '<option value="H1">Heading 1</option>' +
+          '<option value="H2">Heading 2</option>' +
+          '<option value="H3">Heading 3</option>' +
+        '</select>' +
+        '<button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
         '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
         '<span class="note" id="imgUploadStatus"></span></div>' +
+      '<div class="note">Select text for bold/italic/underline/link options.</div>' +
     '</div>' +
     '<div class="field"><label>Sources / charts / papers</label><div class="sources-list" id="sourcesList">'+sourcesHtml+'</div><button class="small-btn" id="addSource">+ Add source</button></div>' +
     platformsHtml +
@@ -1701,7 +2084,27 @@ function renderModal(){
     saveToGitHub();
   };
   populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
+  const headingSelect = document.getElementById('headingSelect');
+  headingSelect.addEventListener('change', ()=>{
+    document.getElementById('scriptEditor').focus();
+    document.execCommand('formatBlock', false, '<' + headingSelect.value.toLowerCase() + '>');
+  });
+  // Keep the dropdown in sync with whichever block the caret is currently in,
+  // so it always shows the true current style rather than whatever was last set.
+  document.getElementById('scriptEditor').addEventListener('keyup', updateHeadingSelectState);
+  document.getElementById('scriptEditor').addEventListener('click', updateHeadingSelectState);
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
+  const setCoverBtn = document.getElementById('setCoverBtn');
+  if(setCoverBtn) setCoverBtn.onclick = ()=> document.getElementById('coverImageInput').click();
+  const changeCoverBtn = document.getElementById('changeCoverBtn');
+  if(changeCoverBtn) changeCoverBtn.onclick = ()=> document.getElementById('coverImageInput').click();
+  const removeCoverBtn = document.getElementById('removeCoverBtn');
+  if(removeCoverBtn) removeCoverBtn.onclick = ()=> removeCoverImage(c);
+  const coverImageInput = document.getElementById('coverImageInput');
+  if(coverImageInput) coverImageInput.onchange = (e)=>{
+    if(e.target.files && e.target.files[0]) setCoverImage(c, e.target.files[0]);
+    e.target.value = '';
+  };
   document.getElementById('scriptImageInput').onchange = (e)=>{
     insertImagesIntoScript(c, e.target.files);
     e.target.value = '';
@@ -1734,6 +2137,8 @@ function renderModal(){
   if(genCaptions) genCaptions.onclick = ()=>{ commitModalFields(); generateCaptionVariants(c); renderModal(); };
   const genSubstack = document.getElementById('genSubstack');
   if(genSubstack) genSubstack.onclick = ()=>{ commitModalFields(); c.platforms.substack.draft = generateSubstackDraft(c); renderModal(); };
+  const publishSubstackBtn = document.getElementById('publishSubstackBtn');
+  if(publishSubstackBtn) publishSubstackBtn.onclick = ()=>{ commitModalFields(); openSubstackConfirm(c); };
 
   modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
     ta.addEventListener('input', ()=>{
@@ -1752,6 +2157,8 @@ function commitModalFields(){
   const c = getCard();
   if(!c) return;
   c.title = document.getElementById('titleInput').value || 'Untitled idea';
+  const subtitleEl = document.getElementById('subtitleInput');
+  if(subtitleEl) c.subtitle = subtitleEl.value;
   c.stage = document.getElementById('stageInput').value;
   c.tags = document.getElementById('tagsInput').value.split(',').map(t=>t.trim()).filter(Boolean);
   const editorEl = document.getElementById('scriptEditor');
@@ -1774,6 +2181,7 @@ function commitModalFields(){
 
 document.addEventListener('click', e=>{
   if(e.target && e.target.id === 'overlay-el') closeModal();
+  if(e.target && e.target.id === 'substackConfirmOverlay-el') closeSubstackConfirm();
 });
 
 initSync();

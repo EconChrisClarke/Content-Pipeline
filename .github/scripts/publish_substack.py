@@ -33,6 +33,37 @@ def strip_unsupported_marks(text):
     return re.sub(r"</?u>", "", text or "")
 
 
+def add_caption_titles(text):
+    """
+    python-substack's markdown renderer only shows a visible caption under
+    an image when the image has a markdown *title* (the optional quoted
+    string after the URL: ![alt](url "title")) — the alt-text slot alone
+    (![caption](url), which is what our app's own editor writes) stays
+    invisible accessibility text and never renders on the page. Duplicate
+    the caption into the title slot too so it actually shows up, matching
+    what the user sees in the app's own caption field.
+
+    Known gap: unlike the alt slot, Substack's title string isn't itself
+    re-parsed as markdown, so a caption that contains its own [link](url)
+    will show the raw markdown syntax as literal text here rather than a
+    real link. Rare in practice; not worth a deeper fix for now.
+    """
+    blocks = (text or "").split("\n\n")
+    out = []
+    for block in blocks:
+        stripped = block.strip()
+        if stripped.startswith("![") and stripped.endswith(")"):
+            cut = stripped.rfind("](")
+            if cut != -1:
+                caption = stripped[2:cut]
+                path = stripped[cut + 2 : -1]
+                if caption:
+                    escaped = caption.replace('"', '\\"')
+                    block = "![" + caption + "](" + path + ' "' + escaped + '")'
+        out.append(block)
+    return "\n\n".join(out)
+
+
 def load_cards():
     with open(CARDS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -107,7 +138,7 @@ def main():
 
         title = card.get("title") or "Untitled"
         subtitle = card.get("subtitle") or ""
-        script = strip_unsupported_marks(card.get("script") or "")
+        script = add_caption_titles(strip_unsupported_marks(card.get("script") or ""))
         tags = card.get("tags") or []
 
         # Publishing is handled explicitly below (after the cover image is

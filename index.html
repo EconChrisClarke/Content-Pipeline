@@ -848,27 +848,11 @@ async function triggerSubstackPublish(card){
     setSyncStatus('bad', 'Connect to GitHub in Settings before publishing.');
     return;
   }
-  card.platforms.substack.status = 'publishing';
+  card.platforms.substack.status = 'queued_for_phone';
   if(openCardId===card.id) renderModal();
-  setSyncStatus('', 'Triggering Substack publish…');
-  try{
-    const url = 'https://api.github.com/repos/'+ghConfig.owner+'/'+ghConfig.repo+'/actions/workflows/'+PUBLISH_WORKFLOW_FILE+'/dispatches';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()),
-      body: JSON.stringify({ref: ghConfig.branch, inputs: {card_id: card.id}})
-    });
-    if(!res.ok){
-      const text = await res.text();
-      throw {code:'http_'+res.status, message:text};
-    }
-    setSyncStatus('', 'Publishing to Substack — this can take up to a minute…');
-    pollSubstackPublishStatus(card.id, 0);
-  }catch(err){
-    card.platforms.substack.status = 'not_started';
-    if(openCardId===card.id) renderModal();
-    setSyncStatus('bad', "Couldn't trigger the Substack publish workflow — check the GitHub token has Actions permission in Settings.");
-  }
+  setSyncStatus('', 'Queued — run the Substack shortcut on your phone to finish publishing…');
+  saveToGitHub();
+  pollSubstackPublishStatus(card.id, 0);
 }
 
 // The workflow_dispatch API is fire-and-forget (no run id returned), so we
@@ -876,10 +860,16 @@ async function triggerSubstackPublish(card){
 // + published link, or a failure marker) straight back to the card when it
 // finishes. Local edits made to other fields while this is running are
 // preserved; only the substack platform status/link are pulled from remote.
+// Publishing now happens on your phone (via the Tasker shortcut), not
+// automatically here, so there's no fixed turnaround time — you might run
+// the shortcut seconds or hours after queuing. This poll is just a nicety
+// for when you happen to keep the tab open waiting; if you close it, the
+// status still updates correctly next time you reopen the app, since that
+// re-reads cards.json fresh regardless of whether this loop ever ran.
 async function pollSubstackPublishStatus(cardId, attempt){
-  const MAX_ATTEMPTS = 20; // ~20 * 4s = 80s
+  const MAX_ATTEMPTS = 45; // ~45 * 4s = 3 minutes of live watching, then just stop nagging
   if(attempt >= MAX_ATTEMPTS){
-    setSyncStatus('bad', 'Still working — check the Actions tab on GitHub for progress: github.com/'+ghConfig.owner+'/'+ghConfig.repo+'/actions');
+    setSyncStatus('', 'Still queued — run the Substack shortcut on your phone whenever you\'re ready. This card will show as published next time you reopen the app.');
     return;
   }
   try{
@@ -904,7 +894,7 @@ async function pollSubstackPublishStatus(cardId, attempt){
       if(remoteSt && remoteSt.status === 'publish_failed'){
         const local = state.cards.find(c=>c.id===cardId);
         if(local){ local.platforms.substack.status = 'not_started'; if(openCardId===cardId) renderModal(); }
-        setSyncStatus('bad', 'Substack publish failed — check the Actions tab on GitHub for details: github.com/'+ghConfig.owner+'/'+ghConfig.repo+'/actions');
+        setSyncStatus('bad', 'Substack publish failed — check for an error alert on your phone when you ran the shortcut, then try again.');
         return;
       }
     }
@@ -1993,7 +1983,7 @@ function renderModal(){
     PLATFORMS.forEach(p=>{
       const st = c.platforms[p.key];
       if(p.isSubstack){
-        const publishing = st.status === 'publishing';
+        const publishing = st.status === 'publishing' || st.status === 'queued_for_phone';
         const coverThumb = c.coverImage
           ? '<div class="cover-image-preview" style="margin-top:8px;"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><span class="note">Cover image (set above)</span></div>'
           : '<div class="note" style="margin-top:8px;">No cover image set — add one at the top of this card.</div>';
@@ -2010,7 +2000,7 @@ function renderModal(){
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
           '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
           '<button class="primary" id="publishSubstackBtn" style="margin-top:10px;width:100%;background:var(--danger);" '+(publishing?'disabled':'')+'>' +
-            (publishing ? '⏳ Publishing…' : '🚀 Publish live to Substack') +
+            (st.status === 'queued_for_phone' ? '📱 Queued — run phone shortcut' : publishing ? '⏳ Publishing…' : '🚀 Publish live to Substack') +
           '</button>' +
         '</div>';
       } else {

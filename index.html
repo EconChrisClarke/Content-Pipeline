@@ -403,7 +403,14 @@ document.addEventListener('input', (e)=>{
 // assumption of how fast the user talks) used both to size the word target
 // for a fixed-length script and to translate the current word count into an
 // estimated spoken duration.
-const WPM = 185;
+// Calibrated from two real recorded videos: "Venezuela American Oil Deal"
+// (391 spoken words / 2:45 = ~142 wpm) and "Colorado River Allocation"
+// (571 spoken words / 3:33 = ~161 wpm) — pooled: 962 words / 6:18 = ~153 wpm.
+// If pace drifts over time, redo this the same way: take a few real
+// recorded runtimes, count the actual spoken words in that card's script
+// (skip image/caption lines, same as the live word count already does),
+// divide, and update this number.
+const WPM = 153;
 const TARGET_MINUTES = 3;
 
 function targetWordCount(){

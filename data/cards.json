@@ -418,7 +418,10 @@
           "link": ""
         }
       },
-      "createdAt": "2026-08-27"
+      "createdAt": "2026-08-27",
+      "coverImage": {
+        "path": "data/images/ciwg4e7t-cover-1788881280663-pn1b.jpg"
+      }
     }
   ]
 }

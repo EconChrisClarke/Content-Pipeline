@@ -225,9 +225,6 @@
   <div class="overlay" id="cropOverlay-el" style="z-index:35;">
     <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
   </div>
-  <div class="overlay" id="substackConfirmOverlay-el" style="z-index:36;">
-    <div class="modal" id="substackConfirmModal-el" style="max-width:560px;"></div>
-  </div>
 </div>
 
 <script>
@@ -242,7 +239,17 @@ const STAGES = [
 // rather than back to 'capture', since reaching the researching stage meant
 // the idea had already moved past the raw-idea pile.
 function migrateLegacyStages(cards){
-  (cards||[]).forEach(c=>{ if(c.stage === 'researching') c.stage = 'scripted'; });
+  (cards||[]).forEach(c=>{
+    if(c.stage === 'researching') c.stage = 'scripted';
+    // 'queued_for_phone'/'publishing' were transient states for the two
+    // automated-publish approaches that didn't pan out (GitHub Actions hit
+    // Cloudflare, Tasker's WebView couldn't reliably drive Substack's UI) —
+    // any card still showing one of those is just stale, reset it.
+    const st = c.platforms && c.platforms.substack;
+    if(st && (st.status === 'queued_for_phone' || st.status === 'publishing' || st.status === 'publish_failed')){
+      st.status = 'not_started';
+    }
+  });
   return cards;
 }
 
@@ -807,99 +814,97 @@ function generateSubstackDraft(card){
   return draft;
 }
 
-// ---- live Substack publish (via a GitHub Actions workflow relay) ----
-// The browser can't do this directly: fetch()/XHR are barred from ever
-// setting a Cookie header, and Substack's endpoints aren't CORS-open to
-// third-party origins anyway. So the actual Substack API call happens
-// server-side in a GitHub Actions workflow (publish-substack.yml) that reads
-// the SUBSTACK_SESSION_COOKIE repo secret; this app only ever talks to
-// GitHub's own API, which is what it already does for everything else.
-const PUBLISH_WORKFLOW_FILE = 'publish-substack.yml';
+// ---- Substack: copy-formatted-paste workflow ----
+// Both fully-automated routes hit real walls: GitHub Actions' cloud IPs get
+// Cloudflare-challenged, and Tasker's embedded WebView can't reliably drive
+// Substack's own modern login/editor UI. This falls back to something that
+// always works because it's just you, in your own real browser: the app
+// puts genuinely-formatted content (real <b>/<h2>/<a>/<img> tags, not
+// markdown syntax) on the clipboard, Substack's own rich editor reads that
+// formatting straight off the paste, and you publish it yourself. Substack
+// status/link tracking reverts to the same manual dropdown + link field the
+// other platforms already use, since there's no automated callback anymore.
 const PUBLICATION_URL = 'https://econchrisclarke.substack.com/';
+const SUBSTACK_NEW_POST_URL = 'https://econchrisclarke.substack.com/publish/post?type=newsletter';
 
-function openSubstackConfirm(card){
-  const modal = document.getElementById('substackConfirmModal-el');
-  const coverHtml = card.coverImage
-    ? '<img src="'+escapeHtml(imgSrc(card.coverImage.path))+'" style="max-width:100%;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;display:block;">'
-    : '';
-  const previewText = (card.script||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*_]|<\/?u>/g,'').replace(/\s+/g,' ').trim().slice(0, 300);
-  modal.innerHTML =
-    '<h2>Publish to Substack?</h2>' +
-    '<div class="banner bad">This publishes live to <strong>'+PUBLICATION_URL+'</strong> and emails every subscriber immediately. There\'s no undo from here — you\'d need to unpublish/delete it manually in Substack afterward.</div>' +
-    coverHtml +
-    '<div style="font-family:var(--font-display);font-weight:700;font-size:1.2em;margin-bottom:2px;">'+escapeHtml(card.title)+'</div>' +
-    (card.subtitle ? '<div style="color:var(--ink-soft);margin-bottom:10px;">'+escapeHtml(card.subtitle)+'</div>' : '') +
-    '<div class="note" style="margin-bottom:14px;">'+escapeHtml(previewText)+(card.script && card.script.length>300 ? '…' : '')+'</div>' +
-    (card.tags.length ? '<div class="note">Tags: '+card.tags.map(escapeHtml).join(', ')+'</div>' : '') +
-    '<div class="note">Audience: everyone (free)</div>' +
-    '<div class="modal-actions"><div class="left"><button class="ghost" id="substackConfirmCancel">Cancel</button></div>' +
-      '<button class="primary" id="substackConfirmGo" style="background:var(--danger);">Yes, publish now</button></div>';
-  document.getElementById('substackConfirmOverlay-el').classList.add('open');
-  document.getElementById('substackConfirmCancel').onclick = closeSubstackConfirm;
-  document.getElementById('substackConfirmGo').onclick = ()=> triggerSubstackPublish(card);
-}
-function closeSubstackConfirm(){
-  document.getElementById('substackConfirmOverlay-el').classList.remove('open');
+// Renders a card's script into real HTML (not the markdown-ish stored
+// syntax) with public, stable image URLs — this is what actually gets put
+// on the clipboard, so it must never reference session-local blob: URLs
+// (those don't survive being pasted into a different tab/origin). Mirrors
+// populateScriptEditor's block-parsing, but building plain HTML rather than
+// the live editor's DOM (which prefers local blob previews via imgSrc()).
+function scriptToClipboardHtml(card){
+  const container = document.createElement('div');
+  const blocks = (card.script || '').split(/\n{2,}/);
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(!trimmed) return;
+    if(isImageLine(trimmed)){
+      const path = imageLinePath(trimmed);
+      const caption = imageLineCaption(trimmed);
+      const wrap = document.createElement('div');
+      const img = document.createElement('img');
+      img.src = 'https://raw.githubusercontent.com/'+ghConfig.owner+'/'+ghConfig.repo+'/'+ghConfig.branch+'/'+path;
+      img.style.maxWidth = '100%';
+      wrap.appendChild(img);
+      if(caption){
+        const capEl = document.createElement('div');
+        capEl.style.fontStyle = 'italic';
+        appendInlineMarkdown(capEl, caption);
+        wrap.appendChild(capEl);
+      }
+      container.appendChild(wrap);
+      return;
+    }
+    const headerMatch = HEADER_LINE_RE.exec(trimmed);
+    if(headerMatch){
+      const h = document.createElement('h'+headerMatch[1].length);
+      appendInlineMarkdown(h, headerMatch[2]);
+      container.appendChild(h);
+      return;
+    }
+    const p = document.createElement('p');
+    trimmed.split('\n').forEach((line, idx)=>{
+      if(idx>0) p.appendChild(document.createElement('br'));
+      appendInlineMarkdown(p, line);
+    });
+    container.appendChild(p);
+  });
+  return container;
 }
 
-async function triggerSubstackPublish(card){
-  closeSubstackConfirm();
-  if(!syncEnabled || !ghConfig){
-    setSyncStatus('bad', 'Connect to GitHub in Settings before publishing.');
-    return;
-  }
-  card.platforms.substack.status = 'queued_for_phone';
-  if(openCardId===card.id) renderModal();
-  setSyncStatus('', 'Queued — run the Substack shortcut on your phone to finish publishing…');
-  saveToGitHub();
-  pollSubstackPublishStatus(card.id, 0);
-}
-
-// The workflow_dispatch API is fire-and-forget (no run id returned), so we
-// poll the saved cards.json itself — the workflow writes the result (status
-// + published link, or a failure marker) straight back to the card when it
-// finishes. Local edits made to other fields while this is running are
-// preserved; only the substack platform status/link are pulled from remote.
-// Publishing now happens on your phone (via the Tasker shortcut), not
-// automatically here, so there's no fixed turnaround time — you might run
-// the shortcut seconds or hours after queuing. This poll is just a nicety
-// for when you happen to keep the tab open waiting; if you close it, the
-// status still updates correctly next time you reopen the app, since that
-// re-reads cards.json fresh regardless of whether this loop ever ran.
-async function pollSubstackPublishStatus(cardId, attempt){
-  const MAX_ATTEMPTS = 45; // ~45 * 4s = 3 minutes of live watching, then just stop nagging
-  if(attempt >= MAX_ATTEMPTS){
-    setSyncStatus('', 'Still queued — run the Substack shortcut on your phone whenever you\'re ready. This card will show as published next time you reopen the app.');
+async function copyRichTextToClipboard(container, label){
+  if(!navigator.clipboard || !window.ClipboardItem){
+    setSyncStatus('bad', "This browser doesn't support copying formatted content to the clipboard.");
     return;
   }
   try{
-    const file = await ghGetFile(DATA_PATH);
-    if(file){
-      const json = JSON.parse(b64DecodeUnicode(file.content));
-      const cards = Array.isArray(json.cards) ? json.cards : [];
-      const remote = cards.find(c=>c.id===cardId);
-      const remoteSt = remote && remote.platforms && remote.platforms.substack;
-      if(remoteSt && remoteSt.status === 'published'){
-        const local = state.cards.find(c=>c.id===cardId);
-        if(local){
-          local.platforms.substack.status = 'published';
-          local.platforms.substack.link = remoteSt.link;
-          if(openCardId===cardId) renderModal();
-        }
-        cardsSha = file.sha;
-        setSyncStatus('ok', 'Published to Substack: ' + remoteSt.link);
-        render();
-        return;
-      }
-      if(remoteSt && remoteSt.status === 'publish_failed'){
-        const local = state.cards.find(c=>c.id===cardId);
-        if(local){ local.platforms.substack.status = 'not_started'; if(openCardId===cardId) renderModal(); }
-        setSyncStatus('bad', 'Substack publish failed — check for an error alert on your phone when you ran the shortcut, then try again.');
-        return;
-      }
-    }
-  }catch(err){ /* transient read failure — keep polling */ }
-  setTimeout(()=>pollSubstackPublishStatus(cardId, attempt+1), 4000);
+    const html = container.innerHTML;
+    const text = container.innerText || container.textContent || '';
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([html], {type:'text/html'}),
+        'text/plain': new Blob([text], {type:'text/plain'})
+      })
+    ]);
+    setSyncStatus('ok', label + ' copied — paste it into Substack.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy " + label.toLowerCase() + " — try again.");
+  }
+}
+
+async function copyPlainTextToClipboard(text, label){
+  try{
+    await navigator.clipboard.writeText(text);
+    setSyncStatus('ok', label + ' copied — paste it into Substack.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy " + label.toLowerCase() + " — try again.");
+  }
+}
+
+function copySubstackScript(card){
+  const container = scriptToClipboardHtml(card);
+  copyRichTextToClipboard(container, 'Script');
 }
 
 function trimToLimit(text, limit){
@@ -1983,25 +1988,29 @@ function renderModal(){
     PLATFORMS.forEach(p=>{
       const st = c.platforms[p.key];
       if(p.isSubstack){
-        const publishing = st.status === 'publishing' || st.status === 'queued_for_phone';
         const coverThumb = c.coverImage
           ? '<div class="cover-image-preview" style="margin-top:8px;"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><span class="note">Cover image (set above)</span></div>'
           : '<div class="note" style="margin-top:8px;">No cover image set — add one at the top of this card.</div>';
-        const tagNote = c.tags.length ? '<div class="note">Will post with tags: '+c.tags.map(escapeHtml).join(', ')+'</div>' : '';
+        const tagNote = c.tags.length ? '<div class="note">Tags: '+c.tags.map(escapeHtml).join(', ')+'</div>' : '';
         platformsHtml +=
         '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
-          '<select data-plat="'+p.key+'" data-field="status" '+(publishing?'disabled':'')+'>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
             '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
             '<option value="drafted" '+(st.status==='drafted'?'selected':'')+'>Drafted</option>' +
             '<option value="published" '+(st.status==='published'?'selected':'')+'>Published</option>' +
           '</select></div>' +
           coverThumb + tagNote +
-          '<button class="small-btn" id="genSubstack" '+(publishing?'disabled':'')+'>Generate draft from script + sources</button>' +
+          '<div class="note" style="margin:8px 0 4px;">Copy each piece, paste it into Substack\'s own editor:</div>' +
+          '<div class="script-toolbar">' +
+            '<button class="small-btn" id="copySubstackTitleBtn">📋 Title</button>' +
+            (c.subtitle ? '<button class="small-btn" id="copySubstackSubtitleBtn">📋 Subtitle</button>' : '') +
+            '<button class="small-btn" id="copySubstackScriptBtn">📋 Formatted script</button>' +
+            (c.coverImage ? '<button class="small-btn" id="copySubstackCoverBtn">📋 Cover image</button>' : '') +
+          '</div>' +
+          '<button class="ghost" id="openSubstackTabBtn" style="margin-top:8px;width:100%;">↗ Open new Substack post</button>' +
+          '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script + sources</button>' +
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
           '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
-          '<button class="primary" id="publishSubstackBtn" style="margin-top:10px;width:100%;background:var(--danger);" '+(publishing?'disabled':'')+'>' +
-            (st.status === 'queued_for_phone' ? '📱 Queued — run phone shortcut' : publishing ? '⏳ Publishing…' : '🚀 Publish live to Substack') +
-          '</button>' +
         '</div>';
       } else {
         const count = st.caption.length;
@@ -2127,8 +2136,16 @@ function renderModal(){
   if(genCaptions) genCaptions.onclick = ()=>{ commitModalFields(); generateCaptionVariants(c); renderModal(); };
   const genSubstack = document.getElementById('genSubstack');
   if(genSubstack) genSubstack.onclick = ()=>{ commitModalFields(); c.platforms.substack.draft = generateSubstackDraft(c); renderModal(); };
-  const publishSubstackBtn = document.getElementById('publishSubstackBtn');
-  if(publishSubstackBtn) publishSubstackBtn.onclick = ()=>{ commitModalFields(); openSubstackConfirm(c); };
+  const copyTitleBtn = document.getElementById('copySubstackTitleBtn');
+  if(copyTitleBtn) copyTitleBtn.onclick = ()=>{ commitModalFields(); copyPlainTextToClipboard(c.title, 'Title'); };
+  const copySubtitleBtn = document.getElementById('copySubstackSubtitleBtn');
+  if(copySubtitleBtn) copySubtitleBtn.onclick = ()=>{ commitModalFields(); copyPlainTextToClipboard(c.subtitle, 'Subtitle'); };
+  const copyScriptBtn = document.getElementById('copySubstackScriptBtn');
+  if(copyScriptBtn) copyScriptBtn.onclick = ()=>{ commitModalFields(); copySubstackScript(c); };
+  const copyCoverBtn = document.getElementById('copySubstackCoverBtn');
+  if(copyCoverBtn) copyCoverBtn.onclick = ()=>{ if(c.coverImage) copyImageToClipboard(c.coverImage.path); };
+  const openSubstackTabBtn = document.getElementById('openSubstackTabBtn');
+  if(openSubstackTabBtn) openSubstackTabBtn.onclick = ()=> window.open(SUBSTACK_NEW_POST_URL, '_blank');
 
   modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
     ta.addEventListener('input', ()=>{
@@ -2171,7 +2188,6 @@ function commitModalFields(){
 
 document.addEventListener('click', e=>{
   if(e.target && e.target.id === 'overlay-el') closeModal();
-  if(e.target && e.target.id === 'substackConfirmOverlay-el') closeSubstackConfirm();
 });
 
 initSync();

@@ -36,6 +36,12 @@
   }
   const draftId = match[1];
 
+  // Everything past this point is wrapped in one try/catch — an early
+  // failure (bad/expired token, cards.json unreachable, etc.) used to throw
+  // uncaught and fail completely silently, which is indistinguishable from
+  // the bookmarklet not running at all. Now it always surfaces an alert.
+  try {
+
   // ---- GitHub helpers ----
   function ghHeaders() {
     return { 'Authorization': 'Bearer ' + GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' };
@@ -206,11 +212,10 @@
     return;
   }
 
-  try {
-    let coverImageUrl = null;
-    if (card.coverImage && card.coverImage.path) {
-      coverImageUrl = await uploadImageToSubstack(card.coverImage.path);
-    }
+  let coverImageUrl = null;
+  if (card.coverImage && card.coverImage.path) {
+    coverImageUrl = await uploadImageToSubstack(card.coverImage.path);
+  }
 
     const script = stripUnsupportedMarks(card.script || '');
     const bodyContent = await markdownToDoc(script, uploadImageToSubstack, (done, total) => {

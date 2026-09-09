@@ -102,9 +102,6 @@
   .field .hint{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:5px;}
   .row{display:flex;gap:10px;}
   .row > div{flex:1;}
-  .sources-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
-  .source-item{display:flex;gap:6px;align-items:center;}
-  .source-item input{flex:1;}
   .small-btn{background:var(--accent-soft);border:none;color:var(--accent);border-radius:5px;padding:6px 10px;font-size:12px;font-family:var(--font-body);font-weight:500;cursor:pointer;white-space:nowrap;}
   .small-btn:disabled{opacity:.5;cursor:default;}
   .platform-row{border:1px solid var(--line);border-radius:7px;padding:10px 12px;margin-bottom:8px;}
@@ -139,8 +136,13 @@
   .script-editor h1{font-size:1.55em;}
   .script-editor h2{font-size:1.32em;}
   .script-editor h3{font-size:1.14em;}
-  .heading-select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
-  .inline-imgwrap{position:relative;margin:10px 0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  .inline-imgwrap{position:relative;margin:10px 0;}
+  /* Preset resize widths (right-click/long-press an image → Size). Centered
+     via auto margins whenever narrower than the full editor width; "full"
+     (no class) keeps the original 100%-width behavior. */
+  .inline-imgwrap.size-sm{width:35%;margin-left:auto;margin-right:auto;}
+  .inline-imgwrap.size-md{width:60%;margin-left:auto;margin-right:auto;}
+  .inline-imgwrap.size-lg{width:85%;margin-left:auto;margin-right:auto;}
   /* Extra-specific selector (three classes) needed to outrank the generic
      ".field input[type=text]" rule above, which would otherwise paint this
      like an ordinary boxed field instead of plain Substack-style caption text.
@@ -162,10 +164,35 @@
   .link-popover{position:fixed;z-index:32;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
   .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
   .link-popover button{padding:7px 11px;}
-  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;}
-  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;}
-  .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
+  /* user-select:none moved down here from the wrap div itself (see above) —
+     it needs to stay off the image/remove-button specifically (so a mobile
+     long-press doesn't trigger the native image-save callout or text
+     selection), but the wrap DIV around them must NOT carry it: Chrome
+     silently drops Ctrl+C/copy entirely once a selection's start or end
+     touches a user-select:none ancestor, which is exactly what was
+     happening whenever a text selection ran across/next to an inline image. */
+  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;-webkit-user-select:none;user-select:none;}
+  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;max-width:min(260px,90vw);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
   .img-longpress-menu button{min-width:36px;}
+  .img-longpress-menu .sizerow{display:flex;gap:4px;width:100%;justify-content:center;border-top:1px solid var(--line);padding-top:6px;margin-top:2px;}
+  .img-longpress-menu .sizerow button.active{background:var(--accent);color:var(--surface);}
+  /* Footnotes: a superscript reference in the running text, and its
+     definition rendered as its own row down in a "Footnotes" section at the
+     bottom of the script box — this mirrors exactly what Substack's own
+     native footnotes do (clickable superscript number, click jumps to a
+     bottom-of-post list, click the list entry to jump back), since that's
+     the ceiling of what Substack itself supports — no hover/pop-in there. */
+  .footnote-ref{cursor:pointer;color:var(--accent);font-weight:700;padding:0 1px;}
+  .footnote-ref:hover{text-decoration:underline;}
+  .footnote-divider{margin:16px 0 6px;padding-top:10px;border-top:1px solid var(--line);font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .footnote-def{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-soft);margin:6px 0;position:relative;padding-right:20px;}
+  .footnote-back{font-family:var(--font-mono);color:var(--accent);text-decoration:none;flex-shrink:0;cursor:pointer;}
+  .footnote-def-text{flex:1;outline:none;color:var(--ink);}
+  .footnote-def-text:focus{outline:none;border-bottom:1px solid var(--line);}
+  .footnote-def-text:empty:before{content:attr(data-placeholder);color:var(--ink-soft);opacity:.6;pointer-events:none;}
+  .footnote-def .rm{position:absolute;top:-2px;right:-4px;}
+  .footnote-flash{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
   .cropstage{position:relative;max-width:100%;margin:6px auto 14px;background:#000;touch-action:none;}
   .cropstage img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;}
   .croprect{position:absolute;border:2px solid var(--accent);box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move;touch-action:none;}
@@ -207,7 +234,7 @@
       <input type="text" id="quickInput" placeholder="Plop an idea in&hellip; (title only, refine later)">
       <button class="primary" id="quickAdd">Add</button>
     </div>
-    <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, sources&hellip;"></div>
+    <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, footnotes&hellip;"></div>
     <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Filter tags&hellip;">
     <div class="tagfilter" id="tagfilter"></div>
     <div class="spacer"></div>
@@ -394,7 +421,7 @@ let lastFocusedEditable = null;
 let editedFields = new WeakSet();
 document.addEventListener('input', (e)=>{
   const t = e.target;
-  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && t.classList.contains('imgcaption')))) editedFields.add(t);
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && (t.classList.contains('imgcaption') || t.classList.contains('footnote-def-text'))))) editedFields.add(t);
   if(t && t.id === 'scriptEditor') updateWordCountBar(t);
 });
 
@@ -425,7 +452,7 @@ function targetWordCount(){
 function countScriptWords(editorEl){
   let text = '';
   editorEl.childNodes.forEach(node=>{
-    if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')) return;
+    if(node.nodeType===1 && node.classList && (node.classList.contains('inline-imgwrap') || node.classList.contains('footnote-def') || node.classList.contains('footnote-divider'))) return;
     text += (node.textContent || '') + ' ';
   });
   const m = text.match(/\S+/g);
@@ -452,14 +479,6 @@ function updateWordCountBar(editorEl){
   const estMs = (count / WPM) * 60000;
   textEl.textContent = count + ' word' + (count===1 ? '' : 's') + '. Est ' + formatClock(estMs) + ' · target ~' + target + ' for ' + TARGET_MINUTES + ':00';
 }
-function updateHeadingSelectState(){
-  const sel = document.getElementById('headingSelect');
-  if(!sel) return;
-  let block = 'p';
-  try{ block = (document.queryCommandValue('formatBlock') || 'p').toLowerCase(); }catch(e){}
-  sel.value = ['h1','h2','h3'].includes(block) ? block.toUpperCase() : 'P';
-}
-
 function triggerTypingUndo(){
   const fallback = document.getElementById('scriptEditor');
   const target = (lastFocusedEditable && document.body.contains(lastFocusedEditable)) ? lastFocusedEditable : fallback;
@@ -648,10 +667,12 @@ function distributionProgress(card){
 }
 
 function cardHaystack(c){
+  // c.script already carries footnote text inline (as "[^N]: ..." blocks),
+  // so footnote content — including old sources migrated into footnotes —
+  // is searchable for free without listing it separately here.
   return [
     c.title, c.script, c.baseCaption,
-    c.tags.join(' '),
-    c.sources.map(s=>s.label+' '+s.url).join(' ')
+    c.tags.join(' ')
   ].join(' ').toLowerCase();
 }
 
@@ -796,6 +817,8 @@ function quickAdd(){
 
 function openModal(id){
   openCardId = id;
+  const c = getCard();
+  if(c && migrateLegacySourcesToFootnotes(c)) saveToGitHub();
   renderModal();
   document.getElementById('overlay-el').classList.add('open');
 }
@@ -813,11 +836,13 @@ function generateSubstackDraft(card){
   // which would otherwise scramble the image placement.
   let draft = '# ' + card.title + '\n\n';
   if(card.subtitle) draft += '*' + card.subtitle + '*\n\n';
+  // Footnote definitions ("[^N]: ...") already ride along verbatim as the
+  // trailing block(s) of card.script, so they show up here for free. Note
+  // for whoever's pasting this into Substack: Substack does NOT turn pasted
+  // "[^N]" text into its own real interactive footnotes — that only happens
+  // through Substack's own footnote toolbar button. Use these numbered
+  // notes as the reference copy while re-adding each one by hand there.
   draft += (card.script||'').trim() || '(No script text yet — write the script first, then regenerate.)';
-  if(card.sources.length){
-    draft += '\n\n---\n**Sources**\n';
-    card.sources.forEach(s=>{ draft += '- [' + (s.label||s.url) + '](' + s.url + ')\n'; });
-  }
   return draft;
 }
 
@@ -842,14 +867,18 @@ const SUBSTACK_NEW_POST_URL = 'https://econchrisclarke.substack.com/publish/post
 // the live editor's DOM (which prefers local blob previews via imgSrc()).
 function scriptToClipboardHtml(card){
   const container = document.createElement('div');
+  const footnoteDefs = [];
   const blocks = (card.script || '').split(/\n{2,}/);
+  const sizePct = {sm:'35%', md:'60%', lg:'85%'};
   blocks.forEach(block=>{
     const trimmed = block.trim();
     if(!trimmed) return;
     if(isImageLine(trimmed)){
       const path = imageLinePath(trimmed);
       const caption = imageLineCaption(trimmed);
+      const size = imageLineSize(trimmed);
       const wrap = document.createElement('div');
+      if(sizePct[size]){ wrap.style.width = sizePct[size]; wrap.style.margin = '0 auto'; }
       const img = document.createElement('img');
       img.src = 'https://raw.githubusercontent.com/'+ghConfig.owner+'/'+ghConfig.repo+'/'+ghConfig.branch+'/'+path;
       img.style.maxWidth = '100%';
@@ -863,6 +892,15 @@ function scriptToClipboardHtml(card){
       container.appendChild(wrap);
       return;
     }
+    // Footnote definitions never appear inline as their own paragraph in the
+    // Substack copy — they're collected and rendered as a numbered "Notes"
+    // list at the very end instead, matching where Substack's own footnotes
+    // land. (Substack won't turn this pasted list into real interactive
+    // footnotes on its own — see the reminder note near the Substack draft
+    // button — but it gives a clean, correctly-ordered reference to
+    // re-add them from by hand.)
+    const fnDefMatch = FOOTNOTE_DEF_RE.exec(trimmed);
+    if(fnDefMatch){ footnoteDefs.push({num: +fnDefMatch[1], text: fnDefMatch[2]}); return; }
     const headerMatch = HEADER_LINE_RE.exec(trimmed);
     if(headerMatch){
       const h = document.createElement('h'+headerMatch[1].length);
@@ -877,6 +915,21 @@ function scriptToClipboardHtml(card){
     });
     container.appendChild(p);
   });
+  if(footnoteDefs.length){
+    container.appendChild(document.createElement('hr'));
+    const label = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = 'Notes';
+    label.appendChild(strong);
+    container.appendChild(label);
+    const ol = document.createElement('ol');
+    footnoteDefs.sort((a,b)=>a.num-b.num).forEach(fd=>{
+      const li = document.createElement('li');
+      appendInlineMarkdown(li, fd.text);
+      ol.appendChild(li);
+    });
+    container.appendChild(ol);
+  }
   return container;
 }
 
@@ -962,24 +1015,35 @@ function safeExt(filename){
 // its own "]" and "(" characters — so parseImageLine finds the outer
 // path boundary from the LAST "](" in the line rather than the first "]",
 // since the repo-relative path itself never contains that substring.
+// A trailing {sm}/{md}/{lg} marker right after the closing ")" carries the
+// preset display width chosen from the image's right-click/long-press menu;
+// no suffix (the common case) means full width, same as the original
+// behavior before resizing existed.
+const IMAGE_SIZE_RE = /\{(sm|md|lg)\}$/;
 function parseImageLine(line){
-  const t = line.trim();
-  if(!t.startsWith('![') || !t.endsWith(')')) return null;
+  let t = line.trim();
+  if(!t.startsWith('![')) return null;
+  let size = 'full';
+  const sizeMatch = IMAGE_SIZE_RE.exec(t);
+  if(sizeMatch){ size = sizeMatch[1]; t = t.slice(0, -sizeMatch[0].length); }
+  if(!t.endsWith(')')) return null;
   const cut = t.lastIndexOf('](');
   if(cut === -1) return null;
   const path = t.slice(cut + 2, -1);
   if(!path) return null;
-  return { caption: t.slice(2, cut), path };
+  return { caption: t.slice(2, cut), path, size };
 }
-function scriptImageTag(path, caption){
-  return '![' + (caption || '').trim() + '](' + path + ')';
+function scriptImageTag(path, caption, size){
+  const base = '![' + (caption || '').trim() + '](' + path + ')';
+  return (size && size !== 'full') ? base + '{' + size + '}' : base;
 }
 function isImageLine(line){ return !!parseImageLine(line); }
 function imageLinePath(line){ const p = parseImageLine(line); return p ? p.path : null; }
 function imageLineCaption(line){ const p = parseImageLine(line); return p ? p.caption : ''; }
+function imageLineSize(line){ const p = parseImageLine(line); return p ? p.size : 'full'; }
 function removeImageFromScript(script, path){
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const re = new RegExp('\\n*!\\[[\\s\\S]*?\\]\\('+esc+'\\)\\n*','g');
+  const re = new RegExp('\\n*!\\[[\\s\\S]*?\\]\\('+esc+'\\)(?:\\{(?:sm|md|lg)\\})?\\n*','g');
   return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function orphanedImages(card){
@@ -1122,6 +1186,194 @@ function openLinkPopover(rect, opts){
   setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
 }
 
+// ---- footnotes ----
+// Substack's own footnotes are a clickable superscript number in the text
+// that jumps down to a numbered entry at the bottom of the post (and back
+// up again) — no hover popup, no collapsible inline note, that's the whole
+// feature on their end. This mirrors that exactly rather than building
+// something fancier Substack can't actually reproduce: a footnote marker
+// [^N] inline in the script text, and its definition as a [^N]: ... block
+// always kept at the very end of the script, rendered as its own row under
+// a "Footnotes" divider. Numbering is always kept sequential 1..N (see
+// renumberFootnotes), same as Substack manages its own automatically.
+function buildFootnoteDefNode(num, text){
+  const row = document.createElement('div');
+  row.className = 'footnote-def';
+  row.dataset.fn = num;
+  const back = document.createElement('a');
+  back.href = '#';
+  back.className = 'footnote-back';
+  back.textContent = num + '.';
+  back.title = 'Jump back to this footnote’s marker in the text';
+  back.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteRef(row.dataset.fn); };
+  const body = document.createElement('div');
+  body.contentEditable = 'true';
+  body.className = 'footnote-def-text';
+  body.dataset.placeholder = 'Footnote text…';
+  if(text) appendInlineMarkdown(body, text);
+  body.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); body.blur(); } // single-line, like image captions
+  });
+  body.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/[\r\n]+/g, ' ');
+    document.execCommand('insertText', false, t);
+  });
+  body.addEventListener('input', ()=>{
+    if(!body.textContent.trim() && body.innerHTML) body.innerHTML = '';
+  });
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'rm';
+  rm.title = 'Remove this footnote';
+  rm.textContent = '×';
+  rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeFootnote(row.dataset.fn); };
+  row.appendChild(back);
+  row.appendChild(body);
+  row.appendChild(rm);
+  return row;
+}
+function flashEl(el){
+  el.classList.add('footnote-flash');
+  setTimeout(()=>el.classList.remove('footnote-flash'), 900);
+}
+function jumpToFootnoteDef(num){
+  const el = document.querySelector('.footnote-def[data-fn="'+num+'"]');
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); flashEl(el); }
+}
+function jumpToFootnoteRef(num){
+  const el = document.querySelector('.footnote-ref[data-fn="'+num+'"]');
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); flashEl(el); }
+}
+function nextFootnoteNumber(editorEl){
+  return editorEl.querySelectorAll('.footnote-def').length + 1;
+}
+function appendFootnoteDef(editorEl, num, text){
+  let divider = editorEl.querySelector('.footnote-divider');
+  if(!divider){
+    divider = document.createElement('div');
+    divider.className = 'footnote-divider';
+    divider.contentEditable = 'false';
+    divider.textContent = 'Footnotes';
+    editorEl.appendChild(divider);
+  }
+  editorEl.appendChild(buildFootnoteDefNode(String(num), text || ''));
+}
+function removeFootnote(num){
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl) return;
+  editorEl.querySelectorAll('.footnote-ref[data-fn="'+num+'"]').forEach(n=>n.remove());
+  const defRow = editorEl.querySelector('.footnote-def[data-fn="'+num+'"]');
+  if(defRow) defRow.remove();
+  if(!editorEl.querySelector('.footnote-def')){
+    const divider = editorEl.querySelector('.footnote-divider');
+    if(divider) divider.remove();
+  }
+  renumberFootnotes(editorEl);
+  const card = getCard();
+  if(card){ card.script = serializeScriptEditor(editorEl); saveToGitHub(); }
+}
+function renumberFootnotes(editorEl){
+  const defs = Array.from(editorEl.querySelectorAll('.footnote-def')).sort((a,b)=>(+a.dataset.fn)-(+b.dataset.fn));
+  defs.forEach((defRow, idx)=>{
+    const oldNum = defRow.dataset.fn, newNum = String(idx+1);
+    if(oldNum === newNum) return;
+    defRow.dataset.fn = newNum;
+    const back = defRow.querySelector('.footnote-back');
+    if(back) back.textContent = newNum + '.';
+    editorEl.querySelectorAll('.footnote-ref[data-fn="'+oldNum+'"]').forEach(ref=>{
+      ref.dataset.fn = newNum;
+      ref.textContent = newNum;
+    });
+  });
+}
+function insertFootnoteMarker(editorEl, range, num){
+  const sup = document.createElement('sup');
+  sup.className = 'footnote-ref';
+  sup.contentEditable = 'false';
+  sup.dataset.fn = String(num);
+  sup.textContent = String(num);
+  sup.title = 'Footnote ' + num + ' — click to jump to it';
+  sup.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteDef(sup.dataset.fn); };
+  const r = range.cloneRange();
+  r.collapse(false); // drop the marker right after the selection (or right at the cursor, if nothing was selected)
+  r.insertNode(sup);
+  const after = document.createRange();
+  after.setStartAfter(sup);
+  after.collapse(true);
+  const sel = document.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(after);
+}
+// Small popover, styled like the link popover, for typing the footnote's
+// text (which can itself contain a [label](url) link — handy since a lot of
+// these will be citations). Reuses closeLinkPopover/closeLinkPopoverHandler
+// since only one floating popover is ever open at a time.
+function openFootnotePopover(rect, range, editableRoot){
+  closeLinkPopover();
+  closeSelectionToolbar();
+  const pop = document.createElement('div');
+  pop.className = 'link-popover';
+  pop.contentEditable = 'false';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Footnote text…';
+  input.style.minWidth = '220px';
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'primary';
+  addBtn.textContent = 'Add footnote';
+  pop.appendChild(input);
+  pop.appendChild(addBtn);
+  document.body.appendChild(pop);
+  positionFloatingEl(pop, rect, false);
+  const apply = ()=>{
+    const text = input.value.trim();
+    if(!text) return;
+    editableRoot.focus();
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const num = nextFootnoteNumber(editableRoot);
+    insertFootnoteMarker(editableRoot, range, num);
+    appendFootnoteDef(editableRoot, num, text);
+    closeLinkPopover();
+    const card = getCard();
+    if(card){ card.script = serializeScriptEditor(editableRoot); saveToGitHub(); }
+  };
+  addBtn.onclick = (e)=>{ e.preventDefault(); apply(); };
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); apply(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); closeLinkPopover(); }
+  });
+  input.focus();
+  closeLinkPopoverHandler = (e)=>{ if(!pop.contains(e.target)) closeLinkPopover(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
+}
+// Existing sources previously lived in their own "Sources / charts / papers"
+// list, disconnected from any specific spot in the script. That field is
+// gone now that footnotes exist (right-click → Footnote does the same job,
+// anchored to the actual text). Any sources a card already had are migrated
+// once, automatically, into footnotes appended at the end of its script —
+// nothing is silently dropped. Called from openModal, before renderModal.
+function migrateLegacySourcesToFootnotes(c){
+  if(!c.sources || !c.sources.length) return false;
+  let next = 1;
+  const existingNums = (c.script.match(/\[\^(\d+)\]:/g) || []).map(m=>parseInt(m.slice(2), 10));
+  if(existingNums.length) next = Math.max(...existingNums) + 1;
+  const blocks = c.sources.filter(s=>(s.label||s.url)).map(s=>{
+    const label = (s.label || s.url).trim();
+    const url = (s.url || '').trim();
+    const text = url ? ('[' + label + '](' + url + ')') : label;
+    const block = '[^' + next + ']: ' + text;
+    next++;
+    return block;
+  });
+  if(blocks.length) c.script = (c.script ? c.script.trim() + '\n\n' : '') + blocks.join('\n\n');
+  c.sources = [];
+  return blocks.length > 0;
+}
+
 function triggerLinkUI(range, editableRoot){
   if(!range) return;
   const startAnchor = findLinkAncestor(range.startContainer);
@@ -1174,8 +1426,17 @@ function showSelectionToolbar(rect, range, editableRoot){
     b.addEventListener('click', (e)=>{ e.preventDefault(); fn(); });
     return b;
   };
-  bar.appendChild(mk('⧉', 'Copy', ()=>{ restoreSelection(); document.execCommand('copy'); closeSelectionToolbar(); }));
-  bar.appendChild(mk('✂', 'Cut', ()=>{ restoreSelection(); document.execCommand('cut'); closeSelectionToolbar(); }));
+  const collapsed = savedRange.collapsed;
+  // With text actually highlighted: the full set — copy/cut, formatting,
+  // search, link. With just a cursor placed (right-click, nothing
+  // selected): none of those make sense, so only Paste plus (in the main
+  // script editor) paragraph style and "add footnote here" show up — this
+  // is what makes right-click double as the paragraph-style / footnote menu
+  // that used to be a separate control below the script box.
+  if(!collapsed){
+    bar.appendChild(mk('⧉', 'Copy', ()=>{ restoreSelection(); document.execCommand('copy'); closeSelectionToolbar(); }));
+    bar.appendChild(mk('✂', 'Cut', ()=>{ restoreSelection(); document.execCommand('cut'); closeSelectionToolbar(); }));
+  }
   bar.appendChild(mk('📋', 'Paste', async ()=>{
     restoreSelection();
     try{
@@ -1186,29 +1447,50 @@ function showSelectionToolbar(rect, range, editableRoot){
     }
     closeSelectionToolbar();
   }));
-  const applyFormat = (cmd)=>{ restoreSelection(); document.execCommand(cmd); closeSelectionToolbar(); };
-  const boldBtn = mk('B', 'Bold', ()=>applyFormat('bold'));
-  boldBtn.style.fontWeight = '800';
-  const italicBtn = mk('I', 'Italic', ()=>applyFormat('italic'));
-  italicBtn.style.fontStyle = 'italic';
-  const underlineBtn = mk('U', 'Underline', ()=>applyFormat('underline'));
-  underlineBtn.style.textDecoration = 'underline';
-  // Reflect whether the current selection is already bold/italic/underlined —
-  // a quick glance tells you what you'd be toggling before you tap it.
-  try{ if(document.queryCommandState('bold')) boldBtn.classList.add('active'); }catch(e){}
-  try{ if(document.queryCommandState('italic')) italicBtn.classList.add('active'); }catch(e){}
-  try{ if(document.queryCommandState('underline')) underlineBtn.classList.add('active'); }catch(e){}
-  bar.appendChild(boldBtn);
-  bar.appendChild(italicBtn);
-  bar.appendChild(underlineBtn);
-  bar.appendChild(mk('🔍', 'Search the web', ()=>{
-    window.open('https://www.google.com/search?q=' + encodeURIComponent(selectedText), '_blank', 'noopener');
-    closeSelectionToolbar();
-  }));
-  bar.appendChild(mk('🔗', 'Link', ()=>{
-    closeSelectionToolbar();
-    triggerLinkUI(savedRange, editableRoot);
-  }));
+  if(!collapsed){
+    const applyFormat = (cmd)=>{ restoreSelection(); document.execCommand(cmd); closeSelectionToolbar(); };
+    const boldBtn = mk('B', 'Bold', ()=>applyFormat('bold'));
+    boldBtn.style.fontWeight = '800';
+    const italicBtn = mk('I', 'Italic', ()=>applyFormat('italic'));
+    italicBtn.style.fontStyle = 'italic';
+    const underlineBtn = mk('U', 'Underline', ()=>applyFormat('underline'));
+    underlineBtn.style.textDecoration = 'underline';
+    // Reflect whether the current selection is already bold/italic/underlined —
+    // a quick glance tells you what you'd be toggling before you tap it.
+    try{ if(document.queryCommandState('bold')) boldBtn.classList.add('active'); }catch(e){}
+    try{ if(document.queryCommandState('italic')) italicBtn.classList.add('active'); }catch(e){}
+    try{ if(document.queryCommandState('underline')) underlineBtn.classList.add('active'); }catch(e){}
+    bar.appendChild(boldBtn);
+    bar.appendChild(italicBtn);
+    bar.appendChild(underlineBtn);
+    bar.appendChild(mk('🔍', 'Search the web', ()=>{
+      window.open('https://www.google.com/search?q=' + encodeURIComponent(selectedText), '_blank', 'noopener');
+      closeSelectionToolbar();
+    }));
+    bar.appendChild(mk('🔗', 'Link', ()=>{
+      closeSelectionToolbar();
+      triggerLinkUI(savedRange, editableRoot);
+    }));
+  }
+  if(editableRoot && editableRoot.id === 'scriptEditor'){
+    bar.appendChild(mk('📝', 'Add footnote', ()=>{
+      const r = savedRange.cloneRange();
+      const footnoteRect = r.getBoundingClientRect();
+      closeSelectionToolbar();
+      openFootnotePopover((footnoteRect && footnoteRect.width) ? footnoteRect : rect, r, editableRoot);
+    }));
+    // Paragraph style — Normal text / Heading 1-3 — replaces the dropdown
+    // that used to sit below the script box. Works whether or not anything
+    // is selected, since formatBlock only cares which block the caret/
+    // selection is in.
+    let curBlock = 'p';
+    try{ curBlock = (document.queryCommandValue('formatBlock') || 'p').toLowerCase(); }catch(err){}
+    [['p','Normal','Normal text'],['h1','H1','Heading 1'],['h2','H2','Heading 2'],['h3','H3','Heading 3']].forEach(([tag,label,title])=>{
+      const b = mk(label, title, ()=>{ restoreSelection(); document.execCommand('formatBlock', false, '<'+tag+'>'); closeSelectionToolbar(); });
+      if(curBlock === tag) b.classList.add('active');
+      bar.appendChild(b);
+    });
+  }
   document.body.appendChild(bar);
   positionFloatingEl(bar, rect, true);
   selectionToolbarEl = bar;
@@ -1227,6 +1509,28 @@ document.addEventListener('keydown', (e)=>{
   triggerLinkUI(sel.getRangeAt(0).cloneRange(), root);
 });
 
+// Native Ctrl+C sometimes copied nothing when the selection ran across or
+// right up against an inline image: Chrome silently no-ops the copy command
+// once the selection's start/end touches a user-select:none ancestor (fixed
+// on the CSS side too, see .inline-imgwrap above), and the various
+// contenteditable islands in this editor (image captions, footnote text)
+// made that easy to hit by accident. This is a belt-and-suspenders backstop
+// that always puts the plain-text selection on the clipboard directly,
+// regardless of what DOM quirks might otherwise block the browser's default
+// behavior — scoped to just this editor's contenteditable regions so it
+// never interferes with copying out of ordinary inputs/textareas (whose
+// native selection isn't visible to document.getSelection() anyway).
+document.addEventListener('copy', (e)=>{
+  const sel = document.getSelection();
+  if(!sel || sel.isCollapsed || !sel.rangeCount) return;
+  const root = findLinkEditableRoot(sel.anchorNode) || findLinkEditableRoot(sel.focusNode);
+  if(!root) return;
+  const text = sel.getRangeAt(0).toString();
+  if(!text || !e.clipboardData) return;
+  e.clipboardData.setData('text/plain', text);
+  e.preventDefault();
+});
+
 document.addEventListener('contextmenu', (e)=>{
   const root = findLinkEditableRoot(e.target);
   if(!root) return;
@@ -1234,10 +1538,19 @@ document.addEventListener('contextmenu', (e)=>{
   if(!sel || !sel.rangeCount) return;
   const range = sel.getRangeAt(0);
   const inLink = findLinkAncestor(range.startContainer);
-  if(range.collapsed && !inLink) return; // nothing to act on — let the normal menu show
+  const isScriptRoot = root.id === 'scriptEditor';
+  // A collapsed selection (just a placed cursor, nothing highlighted) still
+  // has something to offer in the main script editor — paragraph style and
+  // "add footnote at cursor" don't need any text selected — so only bail
+  // out early for a caption with nothing selected and no link under it.
+  if(range.collapsed && !inLink && !isScriptRoot) return; // nothing to act on — let the normal menu show
   e.preventDefault();
   if(inLink){ triggerLinkUI(range.cloneRange(), root); return; }
-  showSelectionToolbar(range.getBoundingClientRect(), range, root);
+  let rect = range.getBoundingClientRect();
+  if(!rect || (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0)){
+    rect = {left:e.clientX, right:e.clientX, top:e.clientY, bottom:e.clientY, width:0, height:0};
+  }
+  showSelectionToolbar(rect, range, root);
 });
 
 // The toolbar deliberately waits for the selection to stop changing before
@@ -1284,11 +1597,13 @@ document.addEventListener('selectionchange', ()=>{
   }, 300);
 });
 
-function buildImageNode(card, path, caption){
+function buildImageNode(card, path, caption, size){
   const wrap = document.createElement('div');
   wrap.className = 'inline-imgwrap';
   wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
   wrap.dataset.path = path;
+  wrap.dataset.size = size && size !== 'full' ? size : 'full';
+  if(wrap.dataset.size !== 'full') wrap.classList.add('size-' + wrap.dataset.size);
   const img = document.createElement('img');
   img.className = 'inline-image';
   img.loading = 'lazy';
@@ -1421,9 +1736,27 @@ function showImageMenu(wrap, card, path){
   menu.appendChild(mkBtn('↑', 'Move up', ()=>moveImageBlock(card, wrap, -1)));
   menu.appendChild(mkBtn('↓', 'Move down', ()=>moveImageBlock(card, wrap, 1)));
   menu.appendChild(mkBtn('✂ Crop', 'Crop image', ()=>openCropper(card, path, wrap)));
+  const sizeRow = document.createElement('div');
+  sizeRow.className = 'sizerow';
+  const currentSize = wrap.dataset.size || 'full';
+  [['sm','S'],['md','M'],['lg','L'],['full','Full']].forEach(([key,label])=>{
+    const b = mkBtn(label, (key==='full'?'Full width':key.toUpperCase()+' width'), ()=>setImageSize(card, wrap, key));
+    if(key === currentSize) b.classList.add('active');
+    sizeRow.appendChild(b);
+  });
+  menu.appendChild(sizeRow);
   wrap.appendChild(menu);
   closeImageMenuHandler = (e)=>{ if(!menu.contains(e.target)) closeImageMenu(); };
   setTimeout(()=>document.addEventListener('pointerdown', closeImageMenuHandler, true), 0);
+}
+
+function setImageSize(card, wrap, size){
+  ['size-sm','size-md','size-lg'].forEach(c=>wrap.classList.remove(c));
+  if(size !== 'full') wrap.classList.add('size-' + size);
+  wrap.dataset.size = size;
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
 }
 
 function moveImageBlock(card, wrap, direction){
@@ -1641,6 +1974,12 @@ function ensureImageSpacers(editorEl){
 // same way multi-line paragraphs already work.
 const HEADER_LINE_RE = /^(#{1,3})\s+([^\n]*)/;
 
+// A block whose entire first line is "[^N]: <text>" is a footnote
+// definition, not an ordinary paragraph — always kept sorted to the very
+// end of the script text (see appendFootnoteDef) and rendered as its own
+// row under a "Footnotes" divider instead of a plain <p>.
+const FOOTNOTE_DEF_RE = /^\[\^(\d+)\]:\s*([\s\S]*)$/;
+
 function populateScriptEditor(editorEl, script, card){
   editorEl.innerHTML = '';
   const blocks = (script || '').split(/\n{2,}/);
@@ -1648,7 +1987,19 @@ function populateScriptEditor(editorEl, script, card){
     const trimmed = block.trim();
     if(!trimmed) return;
     if(isImageLine(trimmed)){
-      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed)));
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed), imageLineSize(trimmed)));
+      return;
+    }
+    const fnDefMatch = FOOTNOTE_DEF_RE.exec(trimmed);
+    if(fnDefMatch){
+      if(!editorEl.querySelector('.footnote-divider')){
+        const divider = document.createElement('div');
+        divider.className = 'footnote-divider';
+        divider.contentEditable = 'false';
+        divider.textContent = 'Footnotes';
+        editorEl.appendChild(divider);
+      }
+      editorEl.appendChild(buildFootnoteDefNode(fnDefMatch[1], fnDefMatch[2]));
       return;
     }
     const headerMatch = HEADER_LINE_RE.exec(trimmed);
@@ -1718,6 +2069,22 @@ function appendInlineMarkdown(parent, text){
         continue;
       }
     }
+    if(text[i] === '[' && text[i+1] === '^'){
+      const close = text.indexOf(']', i+2);
+      if(close !== -1 && /^\d+$/.test(text.slice(i+2, close))){
+        const num = text.slice(i+2, close);
+        const sup = document.createElement('sup');
+        sup.className = 'footnote-ref';
+        sup.contentEditable = 'false';
+        sup.dataset.fn = num;
+        sup.textContent = num;
+        sup.title = 'Footnote ' + num + ' — click to jump to it';
+        sup.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteDef(sup.dataset.fn); };
+        parent.appendChild(sup);
+        i = close+1;
+        continue;
+      }
+    }
     if(text[i] === '['){
       const closeBracket = text.indexOf(']', i+1);
       if(closeBracket !== -1 && text[closeBracket+1] === '('){
@@ -1763,6 +2130,8 @@ function serializeInlineContent(el){
       text += inner ? ('*' + inner + '*') : '';
     } else if(tag === 'U'){
       text += inner ? ('<u>' + inner + '</u>') : '';
+    } else if(tag === 'SUP' && n.classList.contains('footnote-ref')){
+      text += '[^' + (n.dataset.fn || '') + ']';
     } else {
       text += inner;
     }
@@ -1777,7 +2146,12 @@ function serializeScriptEditor(editorEl){
   editorEl.childNodes.forEach(node=>{
     if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
       const capEl = node.querySelector('.imgcaption');
-      parts.push(scriptImageTag(node.dataset.path, capEl ? serializeInlineContent(capEl).trim() : ''));
+      parts.push(scriptImageTag(node.dataset.path, capEl ? serializeInlineContent(capEl).trim() : '', node.dataset.size));
+    } else if(node.nodeType===1 && node.classList && node.classList.contains('footnote-def')){
+      const bodyEl = node.querySelector('.footnote-def-text');
+      parts.push('[^' + node.dataset.fn + ']: ' + (bodyEl ? serializeInlineContent(bodyEl).trim() : ''));
+    } else if(node.nodeType===1 && node.classList && node.classList.contains('footnote-divider')){
+      // purely a visual separator, regenerated by populateScriptEditor — not part of the saved text
     } else if(node.nodeType===1 && HEADER_PREFIX[node.tagName]){
       const text = serializeInlineContent(node);
       if(text.trim()) parts.push(HEADER_PREFIX[node.tagName] + text);
@@ -1963,13 +2337,6 @@ function renderModal(){
   const modal = document.getElementById('modal-el');
   const tagsInputVal = c.tags.join(', ');
 
-  let sourcesHtml = c.sources.map((s,i)=>
-    '<div class="source-item">' +
-      '<input type="text" placeholder="Label" value="'+escapeHtml(s.label)+'" data-src-label="'+i+'">' +
-      '<input type="text" placeholder="https://..." value="'+escapeHtml(s.url)+'" data-src-url="'+i+'">' +
-      '<button class="small-btn" data-src-remove="'+i+'">Remove</button>' +
-    '</div>').join('');
-
   const orphans = orphanedImages(c);
   const orphansHtml = orphans.length
     ? '<div class="field"><label>Uploaded but not placed in the script yet</label>' +
@@ -2015,7 +2382,10 @@ function renderModal(){
             (c.coverImage ? '<button class="small-btn" id="copySubstackCoverBtn">📋 Cover image</button>' : '') +
           '</div>' +
           '<button class="ghost" id="openSubstackTabBtn" style="margin-top:8px;width:100%;">↗ Open new Substack post</button>' +
-          '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script + sources</button>' +
+          (/\[\^\d+\]:/.test(c.script||'') ?
+            '<div class="note" style="margin-top:8px;">This script has footnotes. Substack won’t turn a pasted "[^N]" into one of its own real footnotes — use the Notes list at the end of the formatted-script paste as your reference and re-add each one with Substack’s own footnote button.</div>'
+            : '') +
+          '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script</button>' +
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
           '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
         '</div>';
@@ -2060,18 +2430,11 @@ function renderModal(){
       '<div class="wordcount-bar"><span class="wordcount-text" id="wordcountText">0 words</span></div>' +
       orphansHtml +
       '<div class="script-toolbar">' +
-        '<select id="headingSelect" title="Paragraph style" class="heading-select">' +
-          '<option value="P">Normal text</option>' +
-          '<option value="H1">Heading 1</option>' +
-          '<option value="H2">Heading 2</option>' +
-          '<option value="H3">Heading 3</option>' +
-        '</select>' +
         '<button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
         '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
         '<span class="note" id="imgUploadStatus"></span></div>' +
-      '<div class="note">Select text for bold/italic/underline/link options.</div>' +
+      '<div class="note">Right-click text (or long-press on mobile) for formatting — bold/italic/underline, links, paragraph style — and to add a footnote. Right-click with nothing selected for just paragraph style / footnote.</div>' +
     '</div>' +
-    '<div class="field"><label>Sources / charts / papers</label><div class="sources-list" id="sourcesList">'+sourcesHtml+'</div><button class="small-btn" id="addSource">+ Add source</button></div>' +
     platformsHtml +
     '<div class="modal-actions">' +
       '<div class="left"><button class="ghost" id="markDead">'+(c.dead ? 'Restore from archive' : "Mark: didn't pan out")+'</button>' +
@@ -2082,7 +2445,6 @@ function renderModal(){
   document.getElementById('stageInput').onchange = ()=>{ commitModalFields(); renderModal(); };
   document.getElementById('closeModalBtn').onclick = closeModal;
   document.getElementById('saveModal').onclick = ()=>{ commitModalFields(); closeModal(); saveToGitHub(); };
-  document.getElementById('addSource').onclick = ()=>{ commitModalFields(); c.sources.push({label:'',url:''}); renderModal(); };
   document.getElementById('markDead').onclick = ()=>{ commitModalFields(); c.dead = !c.dead; renderModal(); saveToGitHub(); };
   document.getElementById('deleteCard').onclick = ()=>{
     state.cards = state.cards.filter(x=>x.id!==c.id);
@@ -2090,15 +2452,6 @@ function renderModal(){
     saveToGitHub();
   };
   populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
-  const headingSelect = document.getElementById('headingSelect');
-  headingSelect.addEventListener('change', ()=>{
-    document.getElementById('scriptEditor').focus();
-    document.execCommand('formatBlock', false, '<' + headingSelect.value.toLowerCase() + '>');
-  });
-  // Keep the dropdown in sync with whichever block the caret is currently in,
-  // so it always shows the true current style rather than whatever was last set.
-  document.getElementById('scriptEditor').addEventListener('keyup', updateHeadingSelectState);
-  document.getElementById('scriptEditor').addEventListener('click', updateHeadingSelectState);
   document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
   const setCoverBtn = document.getElementById('setCoverBtn');
   if(setCoverBtn) setCoverBtn.onclick = ()=> document.getElementById('coverImageInput').click();
@@ -2122,7 +2475,7 @@ function renderModal(){
   }
   modal.addEventListener('focusin', (e)=>{
     const t = e.target;
-    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && t.classList.contains('imgcaption')))) lastFocusedEditable = t;
+    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && (t.classList.contains('imgcaption') || t.classList.contains('footnote-def-text'))))) lastFocusedEditable = t;
   });
   modal.querySelectorAll('[data-place-img]').forEach(btn=>{
     btn.onclick = ()=>{
@@ -2135,10 +2488,6 @@ function renderModal(){
   modal.querySelectorAll('[data-drop-img]').forEach(btn=>{
     btn.onclick = ()=>{ commitModalFields(); deleteImageEverywhere(c, btn.dataset.dropImg); renderModal(); saveToGitHub(); };
   });
-  modal.querySelectorAll('[data-src-remove]').forEach(btn=>{
-    btn.onclick = ()=>{ commitModalFields(); c.sources.splice(+btn.dataset.srcRemove,1); renderModal(); };
-  });
-
   const genCaptions = document.getElementById('genCaptions');
   if(genCaptions) genCaptions.onclick = ()=>{ commitModalFields(); generateCaptionVariants(c); renderModal(); };
   const genSubstack = document.getElementById('genSubstack');
@@ -2177,12 +2526,6 @@ function commitModalFields(){
   c.tags = document.getElementById('tagsInput').value.split(',').map(t=>t.trim()).filter(Boolean);
   const editorEl = document.getElementById('scriptEditor');
   if(editorEl) c.script = serializeScriptEditor(editorEl);
-
-  document.querySelectorAll('#sourcesList .source-item').forEach((row,i)=>{
-    if(!c.sources[i]) return;
-    c.sources[i].label = row.querySelector('[data-src-label]').value;
-    c.sources[i].url = row.querySelector('[data-src-url]').value;
-  });
 
   const baseCapEl = document.getElementById('baseCaption');
   if(baseCapEl) c.baseCaption = baseCapEl.value;

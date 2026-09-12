@@ -4,10 +4,15 @@
       "id": "cqkw2lcn",
       "title": "Economy Situation Sept 2026",
       "subtitle": "",
-      "tags": [],
-      "stage": "capture",
+      "tags": [
+        "Labor",
+        "jobs",
+        "hire",
+        "layoffs"
+      ],
+      "stage": "scripted",
       "dead": false,
-      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png){sm}",
+      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png)",
       "sources": [],
       "images": [
         {

@@ -1,22 +1,15 @@
 {
   "cards": [
     {
-      "id": "cpd8rshs",
-      "title": "Men Jobs Situation",
+      "id": "c0n09nu1",
+      "title": "Men and manufacturing",
       "subtitle": "",
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "No new jobs for men under the Trump administration.\n\n![](data/images/cpd8rshs-1789237584569-pk2r.jpg)\n\nLet's also look at native born unemployment.\n\n![](data/images/cpd8rshs-1789237653286-eefh.jpg)\n\nNow manufacturing.",
+      "script": "",
       "sources": [],
-      "images": [
-        {
-          "path": "data/images/cpd8rshs-1789237584569-pk2r.jpg"
-        },
-        {
-          "path": "data/images/cpd8rshs-1789237653286-eefh.jpg"
-        }
-      ],
+      "images": [],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {
@@ -51,21 +44,16 @@
           "link": ""
         }
       },
-      "createdAt": "2026-09-12"
+      "createdAt": "2026-09-13"
     },
     {
       "id": "cqkw2lcn",
       "title": "Economy Situation Sept 2026",
       "subtitle": "",
-      "tags": [
-        "Labor",
-        "jobs",
-        "hire",
-        "layoffs"
-      ],
-      "stage": "scripted",
+      "tags": [],
+      "stage": "capture",
       "dead": false,
-      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png)",
+      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png){sm}",
       "sources": [],
       "images": [
         {

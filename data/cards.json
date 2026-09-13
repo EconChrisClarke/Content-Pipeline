@@ -7,7 +7,7 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "Mike Konczal\n\n![](data/images/c0n09nu1-1789281142380-mg20.jpg)\n\n![](data/images/c0n09nu1-1789281145831-esfn.png)",
+      "script": "Mike Konczal\n\n![](data/images/c0n09nu1-1789281142380-mg20.jpg)\n\n![](data/images/c0n09nu1-1789281224604-vrbf.png)\n\n![](data/images/c0n09nu1-1789281145831-esfn.png)",
       "sources": [],
       "images": [
         {
@@ -15,6 +15,9 @@
         },
         {
           "path": "data/images/c0n09nu1-1789281145831-esfn.png"
+        },
+        {
+          "path": "data/images/c0n09nu1-1789281224604-vrbf.png"
         }
       ],
       "coverImage": null,

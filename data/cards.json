@@ -7,9 +7,19 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "Mike Konczal\n\n![](data/images/c0n09nu1-1789281142380-mg20.jpg)\n\n![](data/images/c0n09nu1-1789281144362-9egy.jpg)\n\n![](data/images/c0n09nu1-1789281145831-esfn.png)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/c0n09nu1-1789281142380-mg20.jpg"
+        },
+        {
+          "path": "data/images/c0n09nu1-1789281144362-9egy.jpg"
+        },
+        {
+          "path": "data/images/c0n09nu1-1789281145831-esfn.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

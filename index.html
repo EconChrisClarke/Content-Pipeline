@@ -2782,9 +2782,10 @@ function renderModal(){
     platformsHtml += allDone
       ? '<div class="banner done">All '+total+' platforms marked complete. Source video in Drive can be deleted 7 days after the last post — auto-delete date: <strong>'+addDays(new Date(),7)+'</strong>.</div>'
       : '<div class="banner">'+done+'/'+total+' platforms posted. This card is your live backlog for what\'s left.</div>';
-    platformsHtml += '<button class="small-btn" id="genCaptions">Generate caption variants from base caption</button>';
     platformsHtml += '<div class="field" style="margin-top:8px;"><label>Base caption (usually TikTok\'s)</label><textarea id="baseCaption">'+escapeHtml(c.baseCaption)+'</textarea>' +
       '<div class="charcount" id="baseCaptionCount" style="text-align:left;">'+ (c.baseCaption||'').length +' characters</div>' +
+      '<div class="note">Every platform box below updates automatically as you type here, with each platform\'s own hashtag/length rules applied.</div>' +
+      '<button class="small-btn" id="genCaptions" style="margin-top:6px;">Force re-sync captions now</button>' +
       '<div class="note">Platform limits — ' + PLATFORMS.filter(p=>!p.isSubstack).map(p=>{
         let bit = p.label + ': ' + (p.limit ? p.limit + ' chars' : 'no limit');
         if(!p.hashtags) bit += ' (hashtags stripped)';
@@ -3024,6 +3025,26 @@ function renderModal(){
   if(baseCapEl2 && baseCapCountEl){
     baseCapEl2.addEventListener('input', ()=>{
       baseCapCountEl.textContent = baseCapEl2.value.length + ' characters';
+      // Live-sync: push the base caption out to every platform's caption box
+      // as you type, applying each platform's own hashtag/length rules —
+      // no need to click "Generate caption variants" separately anymore.
+      // This always overwrites each platform box (per Christopher's choice),
+      // so a manually hand-edited platform caption gets replaced the next
+      // time the base caption changes.
+      c.baseCaption = baseCapEl2.value;
+      generateCaptionVariants(c);
+      PLATFORMS.forEach(p=>{
+        if(p.isSubstack) return;
+        const ta = modal.querySelector('textarea[data-plat="'+p.key+'"][data-field="caption"]');
+        if(!ta) return;
+        ta.value = c.platforms[p.key].caption;
+        const row = ta.closest('.platform-row');
+        const cc = row ? row.querySelector('.charcount') : null;
+        if(cc){
+          cc.textContent = ta.value.length + (p.limit ? ' / '+p.limit : '');
+          cc.classList.toggle('over', !!(p.limit && ta.value.length>p.limit));
+        }
+      });
     });
   }
 

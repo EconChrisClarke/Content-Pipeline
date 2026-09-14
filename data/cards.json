@@ -1,41 +1,87 @@
 {
   "cards": [
     {
-      "id": "c4vcj692",
-      "title": "Testing testing one two three",
+      "id": "c17qt2fb",
+      "title": "Fixing the budget in the back of the poor",
       "subtitle": "",
       "tags": [],
-      "stage": "distributing",
+      "stage": "capture",
       "dead": false,
-      "script": "Testing the script area.",
+      "script": "",
       "sources": [],
       "images": [],
       "coverImage": null,
-      "baseCaption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
+      "baseCaption": "",
       "platforms": {
         "tiktok": {
           "status": "not_started",
-          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
+          "caption": "",
           "link": ""
         },
         "instagram": {
           "status": "not_started",
-          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
+          "caption": "",
           "link": ""
         },
         "x": {
           "status": "not_started",
-          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially…",
+          "caption": "",
           "link": ""
         },
         "youtube": {
           "status": "not_started",
-          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
+          "caption": "",
           "link": ""
         },
         "bsky": {
           "status": "not_started",
-          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags.…",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-09-14"
+    },
+    {
+      "id": "c4vcj692",
+      "title": "Testing testing one two three",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "",
+      "sources": [],
+      "images": [],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         },
         "substack": {

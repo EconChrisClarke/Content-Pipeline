@@ -281,13 +281,33 @@ function migrateLegacyStages(cards){
     if(st && (st.status === 'queued_for_phone' || st.status === 'publishing' || st.status === 'publish_failed')){
       st.status = 'not_started';
     }
+    // The old combined "Instagram / Threads / FB" platform was split into a
+    // real 'instagram' posting button plus a manual 'threads_fb' entry.
+    // Existing cards keep their old caption text under 'instagram' as-is
+    // (same key, no data lost) — this just seeds the NEW 'threads_fb' key
+    // with a copy of that same text on first load, per Christopher's choice,
+    // and backfills any other platform key an older card predates.
+    if(c.platforms){
+      const hadThreadsFb = !!c.platforms.threads_fb;
+      PLATFORMS.forEach(p=>{
+        if(!c.platforms[p.key]){
+          c.platforms[p.key] = p.isSubstack
+            ? {status:'not_started', draft:'', link:''}
+            : {status:'not_started', caption:'', link:''};
+        }
+      });
+      if(!hadThreadsFb && c.platforms.instagram && c.platforms.instagram.caption){
+        c.platforms.threads_fb.caption = c.platforms.instagram.caption;
+      }
+    }
   });
   return cards;
 }
 
 const PLATFORMS = [
   {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
-  {key:'instagram',  label:'Instagram / Threads / FB',hashtags:true,  limit:null},
+  {key:'instagram',  label:'Instagram',               hashtags:true,  limit:2200, isInstagram:true},
+  {key:'threads_fb', label:'Threads / Facebook',      hashtags:true,  limit:null},
   {key:'x',          label:'X',                       hashtags:false, limit:280},
   {key:'youtube',    label:'YouTube',                 hashtags:true,  limit:null, isYouTube:true},
   {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300, isBluesky:true},
@@ -353,6 +373,148 @@ function saveYtConfig(cfg){
   localStorage.setItem(YT_CONFIG_KEY, JSON.stringify(cfg));
 }
 let ytConfig = loadYtConfig();
+
+// ---- Instagram connection (Meta app credentials + OAuth token) ----
+// Unlike Bluesky's app password or YouTube's non-secret OAuth Client ID,
+// Instagram's flow needs a genuine app secret to exchange an authorization
+// code for a token. Meta's own guidance is to keep that exchange
+// server-side; Christopher chose to accept the same "stored only in this
+// browser's localStorage, never baked into the file" trust model already
+// used for the GitHub token and Bluesky app password above, rather than
+// stand up a backend just for this one call. Worth knowing either way:
+// Meta blocks the very FIRST code-for-token exchange from any browser JS
+// outright -- api.instagram.com/oauth/access_token returns no CORS headers
+// at all, confirmed by hand, not just documented as a "should be
+// server-side" recommendation -- so that one step can't be automated away
+// without a real server doing it, secret-storage choice aside. Every other
+// call in this flow (long-lived exchange, refresh, posting) DOES support
+// CORS and runs straight from the browser like Bluesky/YouTube. See
+// igCheckForOAuthRedirect/igCompleteConnect below for how that one
+// unavoidable step is handed to Christopher as a copy-paste command
+// instead, needed only when first connecting or fully reconnecting later.
+const IG_CONFIG_KEY = 'cp_instagram_config_v1';
+function loadIgConfig(){
+  try{ return JSON.parse(localStorage.getItem(IG_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveIgConfig(cfg){
+  localStorage.setItem(IG_CONFIG_KEY, JSON.stringify(cfg));
+}
+let igConfig = loadIgConfig();
+
+// ---- Instagram: OAuth connect flow ----
+// "Instagram API with Instagram Login" (Meta, live since July 2024) --
+// confirmed via Meta's own docs that this does NOT require linking a
+// Facebook Page, just Christopher's own Instagram professional (Business
+// or Creator) account added as a tester on his own Meta app. Two scopes:
+// instagram_business_basic (profile) and instagram_business_content_publish
+// (posting).
+const IG_OAUTH_SCOPE = 'instagram_business_basic,instagram_business_content_publish';
+const IG_STATE_KEY = 'cp_instagram_oauth_state';
+let pendingIgCode = null;
+
+function igRedirectUri(){
+  // Must exactly match a URI registered in the Meta app, including any
+  // trailing slash -- computed from the page's own current location rather
+  // than hardcoded, so it stays correct if the repo/Pages URL ever changes.
+  return location.origin + location.pathname;
+}
+
+function igStartAuthorize(){
+  if(!igConfig || !igConfig.clientId){
+    setSyncStatus('bad', 'Enter your Instagram App ID (and App Secret) in Settings first.');
+    return;
+  }
+  const state = Math.random().toString(36).slice(2);
+  sessionStorage.setItem(IG_STATE_KEY, state);
+  const url = 'https://api.instagram.com/oauth/authorize'
+    + '?client_id=' + encodeURIComponent(igConfig.clientId)
+    + '&redirect_uri=' + encodeURIComponent(igRedirectUri())
+    + '&scope=' + encodeURIComponent(IG_OAUTH_SCOPE)
+    + '&response_type=code'
+    + '&state=' + encodeURIComponent(state);
+  location.href = url; // navigate away and back -- Instagram's redirect must land on this exact page, so this can't be a popup
+}
+
+// The one step Meta won't let browser JS do directly (see the note above
+// loadIgConfig) -- handed to Christopher as a ready-made command instead.
+function igBuildCodeExchangeCommand(code){
+  return 'curl -s -X POST https://api.instagram.com/oauth/access_token \\\n'
+    + '  -F "client_id=' + igConfig.clientId + '" \\\n'
+    + '  -F "client_secret=' + igConfig.clientSecret + '" \\\n'
+    + '  -F "grant_type=authorization_code" \\\n'
+    + '  -F "redirect_uri=' + igRedirectUri() + '" \\\n'
+    + '  -F "code=' + code + '"';
+}
+
+// Finishes connecting once Christopher has run that command and pasted back
+// the short-lived access_token it printed: exchanges it for a long-lived
+// (~60 day) token and looks up the account's numeric id + username, both via
+// graph.instagram.com endpoints that DO support CORS.
+async function igCompleteConnect(shortLivedToken){
+  const res = await fetch('https://graph.instagram.com/access_token'
+    + '?grant_type=ig_exchange_token'
+    + '&client_secret=' + encodeURIComponent(igConfig.clientSecret)
+    + '&access_token=' + encodeURIComponent(shortLivedToken));
+  if(!res.ok){
+    const text = await res.text().catch(()=>'');
+    throw new Error('Instagram rejected the token exchange' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  const data = await res.json();
+  igConfig.accessToken = data.access_token;
+  igConfig.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+
+  const meRes = await fetch('https://graph.instagram.com/me?fields=user_id,username&access_token=' + encodeURIComponent(igConfig.accessToken));
+  if(meRes.ok){
+    const me = await meRes.json();
+    igConfig.userId = me.user_id;
+    igConfig.username = me.username;
+  }
+  saveIgConfig(igConfig);
+}
+
+// Best-effort silent refresh, tried once per page load. graph.instagram.com's
+// refresh endpoint supports CORS (unlike the initial code exchange above),
+// so normal use never needs the manual curl step again -- only a full
+// reconnect (access revoked, or the token fully expiring past its ~60 day
+// window without the app being opened) would.
+const IG_REFRESH_BEFORE_MS = 5 * 24 * 60 * 60 * 1000; // refresh with 5 days of runway left
+async function igMaybeRefreshToken(){
+  if(!igConfig || !igConfig.accessToken || !igConfig.tokenExpiresAt) return;
+  if(Date.now() < igConfig.tokenExpiresAt - IG_REFRESH_BEFORE_MS) return;
+  try{
+    const res = await fetch('https://graph.instagram.com/refresh_access_token'
+      + '?grant_type=ig_refresh_token'
+      + '&access_token=' + encodeURIComponent(igConfig.accessToken));
+    if(!res.ok) return; // best-effort -- a real problem will surface at the next post or Settings visit
+    const data = await res.json();
+    igConfig.accessToken = data.access_token;
+    igConfig.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+    saveIgConfig(igConfig);
+  }catch(err){ /* best-effort */ }
+}
+
+// Runs once at startup: if the page just got redirected back from Instagram's
+// consent screen, there'll be a ?code=...&state=... in the URL -- surface the
+// one manual step needed to finish connecting, then scrub the URL so a
+// refresh doesn't try to reuse an already-spent code.
+function igCheckForOAuthRedirect(){
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if(!code) return;
+  const expectedState = sessionStorage.getItem(IG_STATE_KEY);
+  history.replaceState(null, '', location.pathname); // scrub ?code=/&state= regardless of outcome below
+  if(!igConfig || !igConfig.clientId || !igConfig.clientSecret){
+    setSyncStatus('bad', "Instagram sent back a login code, but this browser doesn't have your Instagram App ID/Secret saved -- open Settings, enter them, and try Connect again.");
+    return;
+  }
+  if(expectedState && state !== expectedState){
+    setSyncStatus('bad', 'Instagram login did not come back with the expected state -- try Connect again.');
+    return;
+  }
+  pendingIgCode = code;
+  openSettings(false); // jump straight to the finish-connecting step
+}
 
 function ghHeaders(){
   return {
@@ -655,7 +817,9 @@ function openSettings(forced){
     '<div class="banner">Used by the "Post to YouTube" button. This one\'s a one-time setup in Google\'s own console — see the note below.</div>' +
     '<div class="field"><label>OAuth Client ID</label><input type="text" id="ytClientId" value="'+escapeHtml(ycfg.clientId)+'" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">' +
       '<div class="hint">Not a secret (safe to store plainly) — but it comes from a Google Cloud project only you can create: console.cloud.google.com → New project → enable "YouTube Data API v3" → OAuth consent screen (External, Testing, add yourself as a test user, scope <code>youtube.upload</code>) → Credentials → Create OAuth client ID → Web application → Authorized JavaScript origin: your GitHub Pages URL → copy the Client ID here. Each time you post, you\'ll get a normal Google sign-in popup — no password stored here.</div></div>' +
-    '<div class="modal-actions"><div class="left"></div><button class="primary" id="ytSave">Save YouTube connection</button></div>';
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="ytSave">Save YouTube connection</button></div>' +
+    igSettingsHtml() +
+    '';
   document.getElementById('overlay-el').classList.add('open');
   document.getElementById('cfgCancel').onclick = ()=>{ if(!forced) closeModal(); };
   document.getElementById('cfgSave').onclick = async ()=>{
@@ -683,6 +847,91 @@ function openSettings(forced){
     ytConfig = {clientId};
     saveYtConfig(ytConfig);
     setSyncStatus('ok', 'YouTube connection saved for this device.');
+  };
+  wireIgSettingsHandlers();
+}
+
+// ---- Instagram settings UI ----
+// Rendered as its own chunk (rather than inline in openSettings' big
+// template string above) because it has more states than the other three
+// connections: no credentials yet, credentials saved but not authorized,
+// mid-way through the one manual step (see the note above loadIgConfig),
+// and fully connected.
+function igSettingsHtml(){
+  const icfg = igConfig || {clientId:'', clientSecret:''};
+  let html = '<h2 style="margin-top:28px;">Connect to Instagram</h2>' +
+    '<div class="banner">Used by the "Post to Instagram" button. Needs a free Meta developer app (no Facebook Page required) — see the hint below. Posts as a real Instagram Reel.</div>' +
+    '<div class="field"><label>Instagram App ID</label><input type="text" id="igClientId" value="'+escapeHtml(icfg.clientId||'')+'" placeholder="from developers.facebook.com"></div>' +
+    '<div class="field"><label>Instagram App Secret</label><input type="password" id="igClientSecret" value="'+escapeHtml(icfg.clientSecret||'')+'" placeholder="from developers.facebook.com">' +
+      '<div class="hint">One-time setup at developers.facebook.com: create an app → add the "Instagram" product → "API setup with Instagram login" → add your own Instagram account as an Instagram tester (accept the invite from inside the Instagram app itself, under Settings → Apps and Websites → Tester Invites) → copy the App ID and App Secret shown there into the two fields above. No Facebook Page needed for this login method. Meta blocks browsers from completing one specific step of the connection automatically (see below) — everything else, including day-to-day posting, runs straight from this page.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="igSaveCreds">Save Instagram app credentials</button></div>';
+
+  if(pendingIgCode){
+    html += '<div class="field"><label>Finish connecting</label>' +
+      '<div class="note">Instagram sent back a login code. Run this command once (paste it into a terminal, or a free tool like reqbin.com), then paste the <code>access_token</code> value it prints into the box below.</div>' +
+      '<textarea id="igCodeCmd" readonly style="margin-top:6px;min-height:110px;font-family:monospace;font-size:12px;">'+escapeHtml(igBuildCodeExchangeCommand(pendingIgCode))+'</textarea>' +
+      '<button class="small-btn" type="button" id="igCopyCmd" style="margin-top:6px;">📋 Copy command</button>' +
+    '</div>' +
+    '<div class="field"><label>Paste the access_token here</label><input type="text" id="igShortToken" placeholder="IGQ..."></div>' +
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="igCancelPending">Cancel</button></div><button class="primary" id="igFinishConnect">Finish connecting</button></div>' +
+    '<div class="note" id="igConnectStatus" style="margin-top:6px;"></div>';
+  } else if(icfg.accessToken && icfg.username){
+    html += '<div class="banner done" style="margin-top:8px;">Connected as @'+escapeHtml(icfg.username)+'. Its token refreshes itself automatically — you shouldn\'t need to reconnect unless you revoke access on Instagram\'s side.</div>' +
+      '<div class="modal-actions"><div class="left"><button class="ghost" id="igDisconnect">Disconnect</button></div><button class="primary" id="igReauthorize">Re-authorize</button></div>';
+  } else {
+    html += '<div class="modal-actions"><div class="left"></div><button class="primary" id="igAuthorize">Authorize with Instagram</button></div>';
+  }
+  return html;
+}
+
+function wireIgSettingsHandlers(){
+  const saveCredsBtn = document.getElementById('igSaveCreds');
+  if(saveCredsBtn) saveCredsBtn.onclick = ()=>{
+    const clientId = document.getElementById('igClientId').value.trim();
+    const clientSecret = document.getElementById('igClientSecret').value.trim();
+    if(!clientId || !clientSecret) return;
+    igConfig = Object.assign({}, igConfig, {clientId, clientSecret});
+    saveIgConfig(igConfig);
+    setSyncStatus('ok', 'Instagram app credentials saved for this device.');
+  };
+  const authorizeBtn = document.getElementById('igAuthorize') || document.getElementById('igReauthorize');
+  if(authorizeBtn) authorizeBtn.onclick = ()=>{
+    const clientId = document.getElementById('igClientId').value.trim();
+    const clientSecret = document.getElementById('igClientSecret').value.trim();
+    if(!clientId || !clientSecret){ setSyncStatus('bad', 'Enter and save your Instagram App ID and App Secret first.'); return; }
+    igConfig = Object.assign({}, igConfig, {clientId, clientSecret});
+    saveIgConfig(igConfig);
+    igStartAuthorize();
+  };
+  const disconnectBtn = document.getElementById('igDisconnect');
+  if(disconnectBtn) disconnectBtn.onclick = ()=>{
+    igConfig = {clientId: igConfig.clientId, clientSecret: igConfig.clientSecret};
+    saveIgConfig(igConfig);
+    openSettings(false);
+    setSyncStatus('ok', 'Disconnected from Instagram (app credentials kept).');
+  };
+  const copyCmdBtn = document.getElementById('igCopyCmd');
+  if(copyCmdBtn) copyCmdBtn.onclick = async ()=>{
+    const ta = document.getElementById('igCodeCmd');
+    try{ await navigator.clipboard.writeText(ta.value); setSyncStatus('ok', 'Command copied.'); }
+    catch(err){ ta.select(); setSyncStatus('bad', "Couldn't copy automatically — select-all in the box and copy manually."); }
+  };
+  const cancelPendingBtn = document.getElementById('igCancelPending');
+  if(cancelPendingBtn) cancelPendingBtn.onclick = ()=>{ pendingIgCode = null; openSettings(false); };
+  const finishBtn = document.getElementById('igFinishConnect');
+  if(finishBtn) finishBtn.onclick = async ()=>{
+    const shortToken = document.getElementById('igShortToken').value.trim();
+    const statusEl = document.getElementById('igConnectStatus');
+    if(!shortToken){ if(statusEl) statusEl.textContent = 'Paste the access_token value first.'; return; }
+    if(statusEl) statusEl.textContent = 'Exchanging for a long-lived token…';
+    try{
+      await igCompleteConnect(shortToken);
+      pendingIgCode = null;
+      openSettings(false);
+      setSyncStatus('ok', 'Connected to Instagram as @' + igConfig.username + '.');
+    }catch(err){
+      if(statusEl) statusEl.textContent = (err && err.message) ? err.message : 'Something went wrong finishing the connection.';
+    }
   };
 }
 document.getElementById('settingsBtn').onclick = ()=>openSettings(false);
@@ -1412,6 +1661,127 @@ async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
     saveToGitHub();
   }catch(err){
     const msg = (err && err.message) ? err.message : 'Something went wrong posting to YouTube.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+  }
+}
+
+// ---- Instagram: direct posting (video + caption) ----
+// Meta's Graph API needs the video already hosted at a public URL -- unlike
+// Bluesky/YouTube, there's no direct byte-upload endpoint for this newer
+// "Instagram API with Instagram Login" flow, confirmed by hand against the
+// real endpoints (see the note above loadIgConfig). Since this app already
+// commits images straight into the GitHub repo (data/images/), the video
+// gets the same treatment: committed to data/videos/, then its
+// raw.githubusercontent.com URL is handed to Instagram as video_url for it
+// to fetch on its own. GitHub's Contents API caps a single file at 100MB,
+// so that's the practical size limit here -- well under Instagram's own
+// Reels limit, but a real constraint of this particular hosting trick.
+const IG_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const IG_POLL_INTERVAL_MS = 5000;
+const IG_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+function igRawVideoUrl(path){
+  return 'https://raw.githubusercontent.com/' + ghConfig.owner + '/' + ghConfig.repo + '/' + ghConfig.branch + '/' + path;
+}
+
+async function igCreateContainer(videoUrl, caption){
+  const form = new URLSearchParams();
+  form.set('media_type', 'REELS');
+  form.set('video_url', videoUrl);
+  form.set('caption', caption || '');
+  form.set('access_token', igConfig.accessToken);
+  const res = await fetch('https://graph.instagram.com/' + igConfig.userId + '/media', {method:'POST', body: form});
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok || !data.id){
+    throw new Error('Instagram rejected the post' + (data.error && data.error.message ? ' (' + data.error.message + ')' : '') + '.');
+  }
+  return data.id; // creation_id
+}
+
+// Instagram has to download the video from video_url and process it before
+// it can be published -- this can take anywhere from several seconds to a
+// couple of minutes depending on length, so poll status_code rather than
+// assuming it's ready right after container creation.
+async function igWaitForContainerReady(creationId){
+  const deadline = Date.now() + IG_POLL_TIMEOUT_MS;
+  while(Date.now() < deadline){
+    const res = await fetch('https://graph.instagram.com/' + creationId + '?fields=status_code,status&access_token=' + encodeURIComponent(igConfig.accessToken));
+    const data = await res.json().catch(()=>({}));
+    if(data.status_code === 'FINISHED') return;
+    if(data.status_code === 'ERROR') throw new Error('Instagram failed to process the video' + (data.status ? ' (' + data.status + ')' : '') + '.');
+    await new Promise(r=>setTimeout(r, IG_POLL_INTERVAL_MS));
+  }
+  throw new Error("Timed out waiting for Instagram to process the video -- it may still finish on its own; check your Instagram app in a few minutes before trying again.");
+}
+
+async function igPublishContainer(creationId){
+  const form = new URLSearchParams();
+  form.set('creation_id', creationId);
+  form.set('access_token', igConfig.accessToken);
+  const res = await fetch('https://graph.instagram.com/' + igConfig.userId + '/media_publish', {method:'POST', body: form});
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok || !data.id){
+    throw new Error('Instagram accepted the video but publishing failed' + (data.error && data.error.message ? ' (' + data.error.message + ')' : '') + '.');
+  }
+  return data.id; // published media id
+}
+
+async function igGetPermalink(mediaId){
+  try{
+    const res = await fetch('https://graph.instagram.com/' + mediaId + '?fields=permalink&access_token=' + encodeURIComponent(igConfig.accessToken));
+    const data = await res.json();
+    return data.permalink || '';
+  }catch(err){ return ''; }
+}
+
+async function postVideoToInstagram(card, file, statusEl){
+  if(!igConfig || !igConfig.accessToken || !igConfig.userId){
+    setSyncStatus('bad', 'Connect Instagram in Settings first.');
+    return;
+  }
+  if(!ghConfig || !ghConfig.owner || !ghConfig.repo){
+    setSyncStatus('bad', 'Connect GitHub in Settings first -- Instagram needs a public URL for the video, and this app hosts it in your repo to get one.');
+    return;
+  }
+  if(file.size > IG_MAX_VIDEO_BYTES){
+    if(statusEl) statusEl.textContent = "That video is over GitHub's 100MB upload limit. Instagram itself allows larger Reels, but this app hosts the video in your repo to give Instagram a public URL to fetch it from, and that step is capped at 100MB.";
+    return;
+  }
+  try{
+    await igMaybeRefreshToken();
+
+    if(statusEl) statusEl.textContent = 'Uploading video to your GitHub repo (used as a public URL for Instagram to fetch)…';
+    const base64 = await fileToBase64(file);
+    const ext = safeExt(file.name || 'video.mp4');
+    const path = 'data/videos/' + card.id + '-' + Date.now() + '.' + ext;
+    await ghPutBinaryFile(path, base64, 'Add video for Instagram post on card ' + card.id);
+    const videoUrl = igRawVideoUrl(path);
+
+    if(statusEl) statusEl.textContent = 'Creating Instagram post…';
+    const caption = (card.platforms.instagram && card.platforms.instagram.caption) || '';
+    const creationId = await igCreateContainer(videoUrl, caption);
+
+    if(statusEl) statusEl.textContent = 'Instagram is processing the video (this can take a minute or two)…';
+    await igWaitForContainerReady(creationId);
+
+    if(statusEl) statusEl.textContent = 'Publishing…';
+    const mediaId = await igPublishContainer(creationId);
+    const permalink = await igGetPermalink(mediaId);
+
+    card.platforms.instagram.status = 'posted';
+    card.platforms.instagram.link = permalink || ('https://www.instagram.com/p/' + mediaId);
+    setSyncStatus('ok', 'Posted to Instagram.');
+    // Same reasoning as the Bluesky/YouTube flows above: renderModal()
+    // rebuilds the platform-row markup fresh from card data, wiping any
+    // message set on the OLD statusEl -- render first, then message the
+    // freshly-queried element.
+    renderModal();
+    const freshIgStatusEl = document.getElementById('igPostStatus');
+    if(freshIgStatusEl) freshIgStatusEl.textContent = 'Posted! ' + (permalink || card.platforms.instagram.link);
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to Instagram.';
     if(statusEl) statusEl.textContent = msg;
     setSyncStatus('bad', msg);
   }
@@ -2856,6 +3226,23 @@ function renderModal(){
           '<div class="note" id="ytPostStatus" style="margin-top:4px;"></div>' +
           '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
         '</div>';
+      } else if(p.isInstagram){
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for Instagram">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          '<div class="note">Posts as a Reel. The video is committed into your GitHub repo first (so Instagram has a public URL to fetch it from), then Instagram processes and publishes it — this can take a minute or two.</div>' +
+          '<input type="file" id="igVideoInput" accept="video/*" style="display:none">' +
+          '<button class="primary" type="button" id="postInstagramBtn" style="margin-top:8px;width:100%;">📷 Post video to Instagram</button>' +
+          '<div class="note" id="igPostStatus" style="margin-top:4px;"></div>' +
+          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+        '</div>';
       } else {
         const count = st.caption.length;
         const over = p.limit && count>p.limit;
@@ -3020,6 +3407,19 @@ function renderModal(){
     };
   }
 
+  const postInstagramBtn = document.getElementById('postInstagramBtn');
+  const igVideoInput = document.getElementById('igVideoInput');
+  if(postInstagramBtn && igVideoInput){
+    postInstagramBtn.onclick = ()=>{ commitModalFields(); igVideoInput.click(); };
+    igVideoInput.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!file) return;
+      const statusEl = document.getElementById('igPostStatus');
+      postVideoToInstagram(c, file, statusEl);
+    };
+  }
+
   const baseCapEl2 = document.getElementById('baseCaption');
   const baseCapCountEl = document.getElementById('baseCaptionCount');
   if(baseCapEl2 && baseCapCountEl){
@@ -3085,6 +3485,8 @@ document.addEventListener('click', e=>{
   if(e.target && e.target.id === 'overlay-el') closeModal();
 });
 
+igCheckForOAuthRedirect(); // must run before initSync's forced-Settings-open check below, so a fresh Instagram redirect always gets handled
+igMaybeRefreshToken(); // best-effort, fire-and-forget -- never blocks app startup
 initSync();
 </script>
 

@@ -67,6 +67,16 @@
         const end2 = str.indexOf('*', i + 1);
         if (end2 !== -1) { out.push(...parseInline(str.slice(i + 1, end2), marks.concat([{ type: 'em' }]))); i = end2 + 1; continue; }
       }
+      if (str[i] === '[' && str[i + 1] === '^') {
+        const closeRef = str.indexOf(']', i + 2);
+        if (closeRef !== -1 && /^\d+$/.test(str.slice(i + 2, closeRef))) {
+          // Substack's own footnote reference is a standalone node (not a
+          // text run with a mark) — see FOOTNOTE_DEF_RE / the 'footnote'
+          // node built in markdownToDoc below for the matching definition.
+          out.push({ type: 'footnoteAnchor', attrs: { number: parseInt(str.slice(i + 2, closeRef), 10) } });
+          i = closeRef + 1; continue;
+        }
+      }
       if (str[i] === '[') {
         const closeBracket = str.indexOf(']', i + 1);
         if (closeBracket !== -1 && str[closeBracket + 1] === '(') {
@@ -91,6 +101,11 @@
   function stripUnsupportedMarks(text) {
     return (text || '').replace(/<\/?u>/g, '');
   }
+  // A block whose entire first line is "[^N]: <text>" is a footnote
+  // definition, not an ordinary paragraph — mirrors the same regex the
+  // main app uses (FOOTNOTE_DEF_RE in index.html) so numbering stays
+  // consistent between the editor and this export.
+  const FOOTNOTE_DEF_RE = /^\[\^(\d+)\]:\s*([\s\S]*)$/;
 
   // ---- image upload ----
   function blobToDataUri(blob) {
@@ -122,6 +137,16 @@
     const blocks = (markdown || '').split(/\n{2,}/);
     const HEADER_RE = /^(#{1,3})\s+([^\n]*)/;
     const out = [];
+    // Collected as they're found, then emitted as real Substack 'footnote'
+    // nodes after every other block — confirmed by inspecting a real
+    // Substack draft's own JSON (via GET /api/v1/drafts/:id on a test post)
+    // that footnote nodes render correctly wherever they sit in doc.content,
+    // and that their content supports the same marks (bold/italic/links) as
+    // any other paragraph. So there's no need to interleave them right
+    // after the paragraph that references them — collecting them here and
+    // appending them all at the end (sorted by number, matching how the
+    // script text itself always keeps them at the very end) is sufficient.
+    const footnoteDefs = [];
     const imageBlocks = blocks.filter(b => {
       const t = b.trim();
       return t.startsWith('![') && t.endsWith(')');
@@ -153,6 +178,11 @@
           continue;
         }
       }
+      const fnDefMatch = FOOTNOTE_DEF_RE.exec(trimmed);
+      if (fnDefMatch) {
+        footnoteDefs.push({ num: parseInt(fnDefMatch[1], 10), text: fnDefMatch[2] });
+        continue;
+      }
       const headerMatch = HEADER_RE.exec(trimmed);
       if (headerMatch) {
         out.push({ type: 'heading', attrs: { level: headerMatch[1].length }, content: parseInline(headerMatch[2]) });
@@ -161,6 +191,13 @@
       const paraText = trimmed.replace(/\n/g, ' ');
       out.push({ type: 'paragraph', content: parseInline(paraText) });
     }
+    footnoteDefs.sort((a, b) => a.num - b.num).forEach(fd => {
+      out.push({
+        type: 'footnote',
+        attrs: { number: fd.num },
+        content: [{ type: 'paragraph', attrs: { textAlign: null }, content: parseInline(fd.text) }]
+      });
+    });
     return out;
   }
 

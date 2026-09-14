@@ -7,9 +7,31 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "A new opened from the Washington Post attempts to frame our recent federal budget issues around an excess of generosity. \n\n![](data/images/c17qt2fb-1789423686792-q64m.jpg)\n\n![](data/images/c17qt2fb-1789423688771-tiif.jpg)\n\n![](data/images/c17qt2fb-1789423690765-urwr.jpg)\n\n![](data/images/c17qt2fb-1789423692538-qq7e.jpg)\n\n![](data/images/c17qt2fb-1789423694578-jl9k.jpg)\n\n![](data/images/c17qt2fb-1789423696300-p25j.jpg)\n\n![](data/images/c17qt2fb-1789423698041-j9pz.png)\n\nParticularly agreviois",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/c17qt2fb-1789423686792-q64m.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423688771-tiif.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423690765-urwr.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423692538-qq7e.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423694578-jl9k.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423696300-p25j.jpg"
+        },
+        {
+          "path": "data/images/c17qt2fb-1789423698041-j9pz.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

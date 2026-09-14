@@ -5,37 +5,37 @@
       "title": "Testing testing one two three",
       "subtitle": "",
       "tags": [],
-      "stage": "capture",
+      "stage": "distributing",
       "dead": false,
       "script": "Testing the script area.",
       "sources": [],
       "images": [],
       "coverImage": null,
-      "baseCaption": "",
+      "baseCaption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
       "platforms": {
         "tiktok": {
           "status": "not_started",
-          "caption": "",
+          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
           "link": ""
         },
         "instagram": {
           "status": "not_started",
-          "caption": "",
+          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
           "link": ""
         },
         "x": {
           "status": "not_started",
-          "caption": "",
+          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially…",
           "link": ""
         },
         "youtube": {
           "status": "not_started",
-          "caption": "",
+          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags. Blue sky allows 300.\n\n#economy #economics #money #data #truth",
           "link": ""
         },
         "bsky": {
           "status": "not_started",
-          "caption": "",
+          "caption": "This is the caption. Gotta test it all. Keep working on it and need to see what happens when I have too many characters. Testing some more. It turns out 244 characters is a lot! One more sentence ought to do it. Apparently, it's 280 characters. Which is a lot more, especially without the hashtags.…",
           "link": ""
         },
         "substack": {

@@ -64,6 +64,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-14"
@@ -109,6 +114,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -166,6 +176,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-13"
@@ -177,7 +192,7 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png){sm}",
+      "script": "![[https://fred.stlouisfed.org/graph/?g=1YkZa](https://fred.stlouisfed.org/graph/?g=1YkZa)](data/images/cqkw2lcn-1788994271938-k9xt.png){lg}",
       "sources": [],
       "images": [
         {
@@ -215,6 +230,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -306,6 +326,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-07",
@@ -373,6 +398,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-08-29",
@@ -418,6 +448,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-08-28"
@@ -461,6 +496,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -506,6 +546,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-08-28"
@@ -549,6 +594,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -633,6 +683,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },

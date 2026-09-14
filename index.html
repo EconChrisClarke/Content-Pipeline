@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Google Identity Services: used only for the "Post video to YouTube" button
+     to get a short-lived OAuth access token (youtube.upload scope) straight
+     in the browser -- no server, no client secret, no refresh token stored.
+     See ytGetAccessToken() below. -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   /* Palette and type match Christopher's econ-chart-style house brand:
      brand red #C71E1D, navy/amber/teal/plum as the series colors, the
@@ -284,8 +289,8 @@ const PLATFORMS = [
   {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
   {key:'instagram',  label:'Instagram / Threads / FB',hashtags:true,  limit:null},
   {key:'x',          label:'X',                       hashtags:false, limit:280},
-  {key:'youtube',    label:'YouTube',                 hashtags:false, limit:null},
-  {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300},
+  {key:'youtube',    label:'YouTube',                 hashtags:true,  limit:null, isYouTube:true},
+  {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300, isBluesky:true},
   {key:'substack',   label:'Substack',                hashtags:false, limit:null, isSubstack:true}
 ];
 
@@ -315,6 +320,39 @@ function saveConfig(cfg){
 }
 let ghConfig = loadConfig();
 let cardsSha = null; // current known sha of data/cards.json, for conflict-safe writes
+
+// ---- Bluesky connection (App Password, entered once per device) ----
+// Same pattern as the GitHub token above: stored only in this browser's
+// localStorage, never baked into the file. Bluesky requires a per-app "App
+// Password" (bsky.app → Settings → Privacy and Security → App Passwords) —
+// never the account's real login password — because an app password can be
+// individually revoked and can't reset the account's real password or email.
+const BSKY_CONFIG_KEY = 'cp_bsky_config_v1';
+function loadBskyConfig(){
+  try{ return JSON.parse(localStorage.getItem(BSKY_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveBskyConfig(cfg){
+  localStorage.setItem(BSKY_CONFIG_KEY, JSON.stringify(cfg));
+}
+let bskyConfig = loadBskyConfig();
+
+// ---- YouTube connection (OAuth Client ID, entered once per device) ----
+// Unlike GitHub's token or Bluesky's app password, a Google OAuth "Client
+// ID" isn't a secret -- it's a public identifier baked into every Google
+// sign-in button on the web -- so storing it in localStorage is purely for
+// convenience (so it isn't re-typed every time), not for security. The
+// Client ID comes from Christopher's own Google Cloud project (see the
+// setup notes near ytGetAccessToken below); there's no way for this app to
+// create that project on his behalf, since it requires his own Google
+// account and the Cloud Console UI.
+const YT_CONFIG_KEY = 'cp_youtube_config_v1';
+function loadYtConfig(){
+  try{ return JSON.parse(localStorage.getItem(YT_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveYtConfig(cfg){
+  localStorage.setItem(YT_CONFIG_KEY, JSON.stringify(cfg));
+}
+let ytConfig = loadYtConfig();
 
 function ghHeaders(){
   return {
@@ -591,11 +629,13 @@ async function initSync(){
   await loadFromGitHub();
 }
 
-// ---- settings (GitHub connection) ----
+// ---- settings (GitHub connection + Bluesky connection) ----
 
 function openSettings(forced){
   const modal = document.getElementById('modal-el');
   const cfg = ghConfig || {owner:'', repo:'', branch:'main', token:''};
+  const bcfg = bskyConfig || {handle:'', appPassword:''};
+  const ycfg = ytConfig || {clientId:''};
   modal.innerHTML =
     '<h2>Connect to GitHub</h2>' +
     (forced ? '<div class="banner">This page stores your board in a GitHub repo you own. Enter its details once per device — nothing here is saved anywhere but this browser.</div>' : '') +
@@ -604,7 +644,18 @@ function openSettings(forced){
     '<div class="field"><label>Branch</label><input type="text" id="cfgBranch" value="'+escapeHtml(cfg.branch||'main')+'" placeholder="main"></div>' +
     '<div class="field"><label>Personal access token</label><input type="password" id="cfgToken" value="'+escapeHtml(cfg.token)+'" placeholder="github_pat_...">' +
       '<div class="hint">Fine-grained token, scoped to only this repo, with Contents: Read and write. Generated in GitHub → Settings → Developer settings → Personal access tokens. Stored only in this browser.</div></div>' +
-    '<div class="modal-actions"><div class="left"><button class="ghost" id="cfgCancel">Cancel</button></div><button class="primary" id="cfgSave">Connect</button></div>';
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="cfgCancel">Cancel</button></div><button class="primary" id="cfgSave">Connect</button></div>' +
+    '<h2 style="margin-top:28px;">Connect to Bluesky</h2>' +
+    '<div class="banner">Used by the "Post to Bluesky" button in a card\'s Distribution section. Requires an <strong>App Password</strong> — not your real Bluesky password.</div>' +
+    '<div class="field"><label>Handle</label><input type="text" id="bskyHandle" value="'+escapeHtml(bcfg.handle)+'" placeholder="e.g. econchrisclarke.bsky.social"></div>' +
+    '<div class="field"><label>App password</label><input type="password" id="bskyAppPw" value="'+escapeHtml(bcfg.appPassword)+'" placeholder="xxxx-xxxx-xxxx-xxxx">' +
+      '<div class="hint">Create one at bsky.app → Settings → Privacy and Security → App Passwords. It can be revoked any time without changing your real password. Stored only in this browser, same as the GitHub token above.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="bskySave">Save Bluesky connection</button></div>' +
+    '<h2 style="margin-top:28px;">Connect to YouTube</h2>' +
+    '<div class="banner">Used by the "Post to YouTube" button. This one\'s a one-time setup in Google\'s own console — see the note below.</div>' +
+    '<div class="field"><label>OAuth Client ID</label><input type="text" id="ytClientId" value="'+escapeHtml(ycfg.clientId)+'" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">' +
+      '<div class="hint">Not a secret (safe to store plainly) — but it comes from a Google Cloud project only you can create: console.cloud.google.com → New project → enable "YouTube Data API v3" → OAuth consent screen (External, Testing, add yourself as a test user, scope <code>youtube.upload</code>) → Credentials → Create OAuth client ID → Web application → Authorized JavaScript origin: your GitHub Pages URL → copy the Client ID here. Each time you post, you\'ll get a normal Google sign-in popup — no password stored here.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="ytSave">Save YouTube connection</button></div>';
   document.getElementById('overlay-el').classList.add('open');
   document.getElementById('cfgCancel').onclick = ()=>{ if(!forced) closeModal(); };
   document.getElementById('cfgSave').onclick = async ()=>{
@@ -617,6 +668,21 @@ function openSettings(forced){
     saveConfig(ghConfig);
     closeModal();
     await connectAndMerge();
+  };
+  document.getElementById('bskySave').onclick = ()=>{
+    const handle = document.getElementById('bskyHandle').value.trim().replace(/^@/,'');
+    const appPassword = document.getElementById('bskyAppPw').value.trim();
+    if(!handle || !appPassword) return;
+    bskyConfig = {handle, appPassword};
+    saveBskyConfig(bskyConfig);
+    setSyncStatus('ok', 'Bluesky connection saved for this device.');
+  };
+  document.getElementById('ytSave').onclick = ()=>{
+    const clientId = document.getElementById('ytClientId').value.trim();
+    if(!clientId) return;
+    ytConfig = {clientId};
+    saveYtConfig(ytConfig);
+    setSyncStatus('ok', 'YouTube connection saved for this device.');
   };
 }
 document.getElementById('settingsBtn').onclick = ()=>openSettings(false);
@@ -989,6 +1055,366 @@ function generateCaptionVariants(card){
 function addDays(d, n){
   const r = new Date(d); r.setDate(r.getDate()+n);
   return r.toISOString().slice(0,10);
+}
+
+// ---- Bluesky: direct posting (video + caption) ----
+// Unlike Substack (blocked behind Cloudflare for server-side automation),
+// Bluesky's AT Protocol API is meant to be called straight from a browser —
+// that's how bsky.app itself works — so a real "post it for me" button is
+// possible here, not just a copy-to-clipboard hand-off.
+//
+// Flow: com.atproto.server.createSession (handle + app password -> access
+// token + DID) -> com.atproto.repo.uploadBlob (raw video bytes -> blob ref)
+// -> com.atproto.repo.createRecord (app.bsky.feed.post, with the blob as an
+// app.bsky.embed.video). A fresh session is created every time rather than
+// caching the access token — simpler, and app-password sessions are cheap
+// to create.
+const BSKY_SERVICE = 'https://bsky.social';
+// As of this writing Bluesky's own video limits are 100MB and 3 minutes —
+// checked client-side before spending time uploading, but the server is the
+// real source of truth if these ever change.
+const BSKY_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+
+async function bskyCreateSession(){
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.server.createSession', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({identifier: bskyConfig.handle, password: bskyConfig.appPassword})
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    let msg = 'Bluesky rejected the login — check the handle and app password in Settings.';
+    if(res.status >= 500) msg = "Couldn't reach Bluesky right now — try again in a moment.";
+    throw new Error(msg + (text ? ' (' + text.slice(0,200) + ')' : ''));
+  }
+  return res.json(); // {accessJwt, did, handle, ...}
+}
+
+async function bskyUploadVideoBlob(accessJwt, file){
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.repo.uploadBlob', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessJwt,
+      'Content-Type': file.type || 'video/mp4'
+    },
+    body: file
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('Bluesky rejected the video upload' + (text ? ' (' + text.slice(0,200) + ')' : '') + '.');
+  }
+  const json = await res.json();
+  return json.blob; // blob ref to embed in the post
+}
+
+// Best-effort width/height for the video embed's aspectRatio — Bluesky's
+// video player uses it to size itself before the video has loaded. Not
+// fatal if this fails (some phone-recorded formats can be slow/unable to
+// report metadata in-browser); the post still goes through without it.
+function readVideoDimensions(file){
+  return new Promise((resolve)=>{
+    try{
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      const done = (dims)=>{ URL.revokeObjectURL(url); resolve(dims); };
+      v.preload = 'metadata';
+      v.onloadedmetadata = ()=> done(v.videoWidth && v.videoHeight ? {width:v.videoWidth, height:v.videoHeight} : null);
+      v.onerror = ()=> done(null);
+      v.src = url;
+    }catch(e){ resolve(null); }
+  });
+}
+
+async function bskyCreatePost(session, text, blobRef, aspectRatio){
+  const record = {
+    '$type': 'app.bsky.feed.post',
+    text: text || '',
+    createdAt: new Date().toISOString(),
+    embed: {
+      '$type': 'app.bsky.embed.video',
+      video: blobRef
+    }
+  };
+  if(aspectRatio) record.embed.aspectRatio = aspectRatio;
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.repo.createRecord', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + session.accessJwt,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({repo: session.did, collection: 'app.bsky.feed.post', record})
+  });
+  if(!res.ok){
+    const text2 = await res.text().catch(()=> '');
+    throw new Error('Bluesky rejected the post' + (text2 ? ' (' + text2.slice(0,200) + ')' : '') + '.');
+  }
+  return res.json(); // {uri, cid}
+}
+
+// Turns an at://did:.../app.bsky.feed.post/<rkey> URI into the public
+// bsky.app post URL, so the card's "link" field gets something you can
+// actually click and share instead of an opaque AT-URI.
+function bskyPostUrlFromAtUri(atUri, handle){
+  const m = /\/app\.bsky\.feed\.post\/([a-zA-Z0-9.]+)$/.exec(atUri || '');
+  if(!m) return '';
+  return 'https://bsky.app/profile/' + encodeURIComponent(handle) + '/post/' + m[1];
+}
+
+async function postVideoToBluesky(card, file, statusEl){
+  if(!bskyConfig || !bskyConfig.handle || !bskyConfig.appPassword){
+    setSyncStatus('bad', 'Connect Bluesky in Settings first (handle + app password).');
+    return;
+  }
+  if(file.size > BSKY_MAX_VIDEO_BYTES){
+    const mb = (file.size/1024/1024).toFixed(1);
+    if(statusEl) statusEl.textContent = 'That video is ' + mb + 'MB — Bluesky\'s limit is 100MB. Trim it and try again.';
+    setSyncStatus('bad', 'Video too large for Bluesky (100MB limit).');
+    return;
+  }
+  const caption = (card.platforms.bsky && card.platforms.bsky.caption) || '';
+  if(statusEl) statusEl.textContent = 'Signing in to Bluesky…';
+  setSyncStatus('', 'Posting to Bluesky…');
+  try{
+    const session = await bskyCreateSession();
+    if(statusEl) statusEl.textContent = 'Uploading video (this can take a bit on a slow connection)…';
+    const [blobRef, aspectRatio] = await Promise.all([
+      bskyUploadVideoBlob(session.accessJwt, file),
+      readVideoDimensions(file)
+    ]);
+    if(statusEl) statusEl.textContent = 'Publishing post…';
+    const result = await bskyCreatePost(session, caption, blobRef, aspectRatio);
+    const postUrl = bskyPostUrlFromAtUri(result.uri, session.handle || bskyConfig.handle);
+    card.platforms.bsky.status = 'posted';
+    card.platforms.bsky.link = postUrl || card.platforms.bsky.link;
+    setSyncStatus('ok', 'Posted to Bluesky.');
+    // renderModal() rebuilds the whole platform-row markup from card data,
+    // which would wipe out a message set on the OLD statusEl -- so render
+    // first, then grab the freshly-created status element and message it.
+    renderModal();
+    const freshBskyStatusEl = document.getElementById('bskyPostStatus');
+    if(freshBskyStatusEl) freshBskyStatusEl.textContent = 'Posted! ' + (postUrl || '');
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to Bluesky.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+  }
+}
+
+// ---- YouTube: direct posting (video + auto-Shorts detection + thumbnail) ----
+// Same "call the real API straight from the browser" approach as Bluesky,
+// but the auth model is different: Google OAuth via Google Identity
+// Services (GIS) instead of a password. GIS's token client hands back a
+// short-lived access token (no refresh token, nothing persisted) after the
+// user clicks through a normal Google sign-in popup -- so there's no secret
+// to store here at all, unlike the GitHub token or Bluesky app password.
+// The one-time setup cost is a Google Cloud project (see the hint text in
+// the Settings modal above) that only Christopher can create, since it's
+// tied to his own Google account and API quota.
+//
+// Christopher's rule for Shorts vs. a regular upload: under 3 minutes ->
+// Shorts (auto-thumbnail from the video's first frame, #Shorts appended to
+// the description so YouTube's algorithm treats it as a Short); 3 minutes
+// or longer -> a regular video, and he supplies his own horizontal
+// thumbnail file, prompted for right after the video is picked.
+const YT_SHORTS_MAX_SECONDS = 180;
+const YT_CATEGORY_ID = '27'; // Education
+const YT_UPLOAD_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+
+let ytTokenClient = null;
+function ytGetAccessToken(){
+  return new Promise((resolve, reject)=>{
+    if(!ytConfig || !ytConfig.clientId){
+      reject(new Error('Connect YouTube in Settings first (OAuth Client ID).'));
+      return;
+    }
+    if(!window.google || !google.accounts || !google.accounts.oauth2){
+      reject(new Error("Google's sign-in script hasn't loaded yet -- check your connection and try again."));
+      return;
+    }
+    try{
+      // A fresh token client per call (cheap) rather than caching one keyed
+      // to a client ID that could change in Settings mid-session.
+      ytTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: ytConfig.clientId,
+        scope: YT_UPLOAD_SCOPE,
+        callback: (resp)=>{
+          if(resp && resp.access_token) resolve(resp.access_token);
+          else reject(new Error('Google sign-in did not return an access token.'));
+        },
+        error_callback: (err)=>{
+          reject(new Error('Google sign-in failed or was closed (' + (err && err.type || 'unknown') + ').'));
+        }
+      });
+      ytTokenClient.requestAccessToken();
+    }catch(err){
+      reject(new Error('Could not start Google sign-in: ' + (err && err.message || err)));
+    }
+  });
+}
+
+// Reads a video file's duration/dimensions without uploading it anywhere --
+// same throwaway-<video>-element trick as Bluesky's readVideoDimensions,
+// kept separate since this one also needs .duration for the Shorts cutoff.
+function readVideoMeta(file){
+  return new Promise((resolve, reject)=>{
+    try{
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.muted = true;
+      v.onloadedmetadata = ()=>{
+        resolve({duration: v.duration || 0, width: v.videoWidth || 0, height: v.videoHeight || 0, url, videoEl: v});
+      };
+      v.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error("Couldn't read that video file.")); };
+      v.src = url;
+    }catch(e){ reject(e); }
+  });
+}
+
+// Grabs the video's first frame as a JPEG blob, for the Shorts auto-
+// thumbnail. Seeking to exactly 0 sometimes yields a black/undecoded frame
+// in some browsers, so this nudges to a hair after 0 instead.
+function captureFirstFrame(videoEl){
+  return new Promise((resolve, reject)=>{
+    const grab = ()=>{
+      try{
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+        canvas.getContext('2d').drawImage(videoEl, 0, 0);
+        canvas.toBlob(blob=> blob ? resolve(blob) : reject(new Error('frame capture failed')), 'image/jpeg', 0.92);
+      }catch(err){ reject(err); }
+    };
+    videoEl.onseeked = grab;
+    try{ videoEl.currentTime = Math.min(0.05, (videoEl.duration||1)/2); }
+    catch(err){ reject(err); }
+  });
+}
+
+// Resumable upload, step 1: tell YouTube the metadata and get back a
+// session URL (in the Location header) to PUT the actual bytes to.
+async function ytStartResumableUpload(accessToken, file, metadata){
+  const res = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': file.type || 'video/mp4',
+      'X-Upload-Content-Length': String(file.size)
+    },
+    body: JSON.stringify(metadata)
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('YouTube rejected the upload request' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  const location = res.headers.get('Location');
+  if(!location) throw new Error("YouTube didn't return an upload URL.");
+  return location;
+}
+
+// Resumable upload, step 2: PUT the raw video bytes to that session URL.
+async function ytPutVideoBytes(uploadUrl, file){
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {'Content-Type': file.type || 'video/mp4'},
+    body: file
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('YouTube rejected the video upload' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  return res.json(); // includes .id, the new video's id
+}
+
+async function ytSetThumbnail(accessToken, videoId, blob){
+  const res = await fetch('https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' + encodeURIComponent(videoId), {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Content-Type': blob.type || 'image/jpeg'
+    },
+    body: blob
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('Video uploaded, but setting the thumbnail failed' + (text ? ' (' + text.slice(0,200) + ')' : '') + '.');
+  }
+  return res.json();
+}
+
+function ytWatchUrl(videoId, isShort){
+  return isShort ? ('https://www.youtube.com/shorts/' + videoId) : ('https://www.youtube.com/watch?v=' + videoId);
+}
+
+// Orchestrates the whole thing. `thumbnailFile` is only passed in for a
+// long-form video (Christopher's own horizontal thumbnail, collected by
+// #ytThumbInput before this runs) -- for a Short, the thumbnail is captured
+// automatically from the video's own first frame instead.
+async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
+  if(!ytConfig || !ytConfig.clientId){
+    setSyncStatus('bad', 'Connect YouTube in Settings first (OAuth Client ID).');
+    return;
+  }
+  try{
+    if(statusEl) statusEl.textContent = 'Reading video…';
+    const meta = await readVideoMeta(videoFile);
+    const isShort = meta.duration > 0 && meta.duration < YT_SHORTS_MAX_SECONDS;
+
+    let thumbnailBlob = null;
+    if(isShort){
+      try{ thumbnailBlob = await captureFirstFrame(meta.videoEl); }
+      catch(err){ /* not fatal -- YouTube will just pick its own default thumbnail */ }
+      URL.revokeObjectURL(meta.url);
+    } else {
+      URL.revokeObjectURL(meta.url);
+      thumbnailBlob = thumbnailFile || null;
+    }
+
+    let description = (card.platforms.youtube && card.platforms.youtube.caption) || '';
+    if(isShort && !/#shorts/i.test(description)) description = (description ? description + '\n\n' : '') + '#Shorts';
+
+    if(statusEl) statusEl.textContent = 'Waiting for Google sign-in…';
+    const accessToken = await ytGetAccessToken();
+
+    if(statusEl) statusEl.textContent = 'Starting upload…';
+    const uploadUrl = await ytStartResumableUpload(accessToken, videoFile, {
+      snippet: {
+        title: card.title || 'Untitled',
+        description,
+        categoryId: YT_CATEGORY_ID
+      },
+      status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+    });
+
+    if(statusEl) statusEl.textContent = 'Uploading video (this can take a while on a slow connection)…';
+    const result = await ytPutVideoBytes(uploadUrl, videoFile);
+    const videoId = result.id;
+
+    let thumbWarning = '';
+    if(thumbnailBlob){
+      if(statusEl) statusEl.textContent = 'Setting thumbnail…';
+      try{ await ytSetThumbnail(accessToken, videoId, thumbnailBlob); }
+      catch(err){ thumbWarning = (err.message || 'Thumbnail failed.') + ' (video itself posted fine.) '; }
+    }
+
+    const watchUrl = ytWatchUrl(videoId, isShort);
+    card.platforms.youtube.status = 'posted';
+    card.platforms.youtube.link = watchUrl;
+    setSyncStatus('ok', 'Posted to YouTube.');
+    // Same reasoning as the Bluesky flow above: renderModal() rebuilds the
+    // platform-row markup fresh from card data, wiping any message set on
+    // the OLD statusEl -- render first, then message the new element.
+    renderModal();
+    const freshYtStatusEl = document.getElementById('ytPostStatus');
+    if(freshYtStatusEl) freshYtStatusEl.textContent = thumbWarning + 'Posted' + (isShort ? ' as a Short! ' : '! ') + watchUrl;
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to YouTube.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+  }
 }
 
 // ---- image upload ----
@@ -2357,7 +2783,14 @@ function renderModal(){
       ? '<div class="banner done">All '+total+' platforms marked complete. Source video in Drive can be deleted 7 days after the last post — auto-delete date: <strong>'+addDays(new Date(),7)+'</strong>.</div>'
       : '<div class="banner">'+done+'/'+total+' platforms posted. This card is your live backlog for what\'s left.</div>';
     platformsHtml += '<button class="small-btn" id="genCaptions">Generate caption variants from base caption</button>';
-    platformsHtml += '<div class="field" style="margin-top:8px;"><label>Base caption (usually TikTok\'s)</label><textarea id="baseCaption">'+escapeHtml(c.baseCaption)+'</textarea></div>';
+    platformsHtml += '<div class="field" style="margin-top:8px;"><label>Base caption (usually TikTok\'s)</label><textarea id="baseCaption">'+escapeHtml(c.baseCaption)+'</textarea>' +
+      '<div class="charcount" id="baseCaptionCount" style="text-align:left;">'+ (c.baseCaption||'').length +' characters</div>' +
+      '<div class="note">Platform limits — ' + PLATFORMS.filter(p=>!p.isSubstack).map(p=>{
+        let bit = p.label + ': ' + (p.limit ? p.limit + ' chars' : 'no limit');
+        if(!p.hashtags) bit += ' (hashtags stripped)';
+        return bit;
+      }).join(' · ') + '</div>' +
+    '</div>';
 
     PLATFORMS.forEach(p=>{
       const st = c.platforms[p.key];
@@ -2388,6 +2821,39 @@ function renderModal(){
           '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script</button>' +
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
           '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+        '</div>';
+      } else if(p.isBluesky){
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit, no hashtags)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for '+p.label+'">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          '<input type="file" id="bskyVideoInput" accept="video/*" style="display:none">' +
+          '<button class="primary" type="button" id="postBlueskyBtn" style="margin-top:8px;width:100%;">🦋 Post video to Bluesky</button>' +
+          '<div class="note" id="bskyPostStatus" style="margin-top:4px;"></div>' +
+          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+        '</div>';
+      } else if(p.isYouTube){
+        const count = st.caption.length;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Description for YouTube (hashtags OK)">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount">'+count+'</div>' +
+          '<div class="note">Uses the card title as the YouTube title. Under 3 minutes → posted as a Short with an auto thumbnail (video\'s first frame). 3 minutes or longer → a regular video, and you\'ll be asked to pick your own horizontal thumbnail before it uploads.</div>' +
+          '<input type="file" id="ytVideoInput" accept="video/*" style="display:none">' +
+          '<input type="file" id="ytThumbInput" accept="image/*" style="display:none">' +
+          '<button class="primary" type="button" id="postYoutubeBtn" style="margin-top:8px;width:100%;">▶ Post video to YouTube</button>' +
+          '<div class="note" id="ytPostStatus" style="margin-top:4px;"></div>' +
+          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
         '</div>';
       } else {
         const count = st.caption.length;
@@ -2502,6 +2968,64 @@ function renderModal(){
   if(copyCoverBtn) copyCoverBtn.onclick = ()=>{ if(c.coverImage) copyImageToClipboard(c.coverImage.path); };
   const openSubstackTabBtn = document.getElementById('openSubstackTabBtn');
   if(openSubstackTabBtn) openSubstackTabBtn.onclick = ()=> window.open(SUBSTACK_NEW_POST_URL, '_blank');
+
+  const postBlueskyBtn = document.getElementById('postBlueskyBtn');
+  const bskyVideoInput = document.getElementById('bskyVideoInput');
+  if(postBlueskyBtn && bskyVideoInput){
+    postBlueskyBtn.onclick = ()=>{ commitModalFields(); bskyVideoInput.click(); };
+    bskyVideoInput.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!file) return;
+      const statusEl = document.getElementById('bskyPostStatus');
+      postVideoToBluesky(c, file, statusEl);
+    };
+  }
+
+  const postYoutubeBtn = document.getElementById('postYoutubeBtn');
+  const ytVideoInput = document.getElementById('ytVideoInput');
+  const ytThumbInput = document.getElementById('ytThumbInput');
+  if(postYoutubeBtn && ytVideoInput && ytThumbInput){
+    postYoutubeBtn.onclick = ()=>{ commitModalFields(); ytVideoInput.click(); };
+    ytVideoInput.onchange = async (e)=>{
+      const videoFile = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!videoFile) return;
+      const statusEl = document.getElementById('ytPostStatus');
+      // Decide Shorts vs. regular up front so we know whether to pause here
+      // and ask for a thumbnail before doing anything else.
+      let meta;
+      try{
+        if(statusEl) statusEl.textContent = 'Checking video length…';
+        meta = await readVideoMeta(videoFile);
+        URL.revokeObjectURL(meta.url);
+      }catch(err){
+        if(statusEl) statusEl.textContent = err.message || "Couldn't read that video file.";
+        return;
+      }
+      const isShort = meta.duration > 0 && meta.duration < YT_SHORTS_MAX_SECONDS;
+      if(isShort){
+        postVideoToYouTube(c, videoFile, null, statusEl);
+      } else {
+        if(statusEl) statusEl.textContent = 'This is ' + Math.round(meta.duration) + 's, so it\'s a regular video — pick a horizontal thumbnail next.';
+        ytThumbInput.onchange = (e2)=>{
+          const thumbFile = e2.target.files && e2.target.files[0];
+          e2.target.value = '';
+          if(!thumbFile){ if(statusEl) statusEl.textContent = 'No thumbnail chosen — try again.'; return; }
+          postVideoToYouTube(c, videoFile, thumbFile, statusEl);
+        };
+        ytThumbInput.click();
+      }
+    };
+  }
+
+  const baseCapEl2 = document.getElementById('baseCaption');
+  const baseCapCountEl = document.getElementById('baseCaptionCount');
+  if(baseCapEl2 && baseCapCountEl){
+    baseCapEl2.addEventListener('input', ()=>{
+      baseCapCountEl.textContent = baseCapEl2.value.length + ' characters';
+    });
+  }
 
   modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
     ta.addEventListener('input', ()=>{

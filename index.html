@@ -2558,16 +2558,39 @@ function setImageSize(card, wrap, size){
 function moveImageBlock(card, wrap, direction){
   const editorEl = document.getElementById('scriptEditor');
   if(!editorEl || !wrap.parentNode) return;
+  const isBlankSpacer = n => !!(n && n.nodeType===1 && n.tagName==='P' && !n.textContent.trim());
   // Swap with the immediately adjacent sibling — one paragraph (or image) at
   // a time — whatever that sibling is. Earlier this skipped over paragraph
   // text to jump straight to the next image, which meant "move down" could
   // leap the image past several paragraphs in one click; moving one block at
   // a time keeps reordering predictable relative to the surrounding text.
+  //
+  // One wrinkle: when two images sit directly next to each other,
+  // ensureImageSpacers keeps a blank spacer paragraph between them (so
+  // there's somewhere to click a caret). That spacer isn't real content —
+  // it's dropped on save — so a swap that only moves an image past the
+  // spacer (not past the other image) is invisible: ensureImageSpacers
+  // immediately reinserts an equivalent spacer on the other side, undoing
+  // the visible effect of the click. So a blank spacer is treated as
+  // transparent here: it's removed and hopped over, so the swap lands on
+  // the next real block (image or non-empty paragraph) and the two images
+  // actually trade places. ensureImageSpacers regenerates whatever spacer
+  // is needed afterward.
   if(direction<0){
-    const sib = wrap.previousSibling;
+    let sib = wrap.previousSibling;
+    if(isBlankSpacer(sib)){
+      const spacer = sib;
+      sib = sib.previousSibling;
+      spacer.remove();
+    }
     if(sib) editorEl.insertBefore(wrap, sib);
   } else {
-    const sib = wrap.nextSibling;
+    let sib = wrap.nextSibling;
+    if(isBlankSpacer(sib)){
+      const spacer = sib;
+      sib = sib.nextSibling;
+      spacer.remove();
+    }
     if(sib) editorEl.insertBefore(sib, wrap);
   }
   ensureImageSpacers(editorEl);

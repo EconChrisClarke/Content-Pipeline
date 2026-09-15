@@ -2748,6 +2748,23 @@ function ensureImageSpacers(editorEl){
     }
     node = next;
   }
+  // An image with nothing before/after it inside the editor leaves no
+  // ordinary text node at the very top/bottom of the box for a click to
+  // land a caret on — the wrapper is an atomic, non-editable island
+  // (contentEditable="false"), so a card whose script is just one image,
+  // or that starts/ends with one, left no editable spot to click into at
+  // all. Same fix as the between-two-images case below, applied at the
+  // two edges of the editor.
+  if(isImg(editorEl.firstChild)){
+    const spacer = document.createElement('p');
+    spacer.appendChild(document.createElement('br'));
+    editorEl.insertBefore(spacer, editorEl.firstChild);
+  }
+  if(isImg(editorEl.lastChild)){
+    const spacer = document.createElement('p');
+    spacer.appendChild(document.createElement('br'));
+    editorEl.appendChild(spacer);
+  }
   // Then make sure every remaining pair of directly-adjacent images has a
   // blank paragraph between them.
   node = editorEl.firstChild;

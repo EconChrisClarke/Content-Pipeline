@@ -1,6 +1,57 @@
 {
   "cards": [
     {
+      "id": "cuk7lxhh",
+      "title": "AI water use",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "",
+      "sources": [],
+      "images": [],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-09-16"
+    },
+    {
       "id": "c17qt2fb",
       "title": "Fixing the budget in the back of the poor",
       "subtitle": "The quest to shrink \"the deserving poor\"",

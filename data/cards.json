@@ -58,7 +58,7 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "Andy Masley uses Google's report that an average prompt uses about 2 mL of water. That's mostly from the power generator. The data center itself uses 0.3mL per prompt.",
+      "script": "Andy Masley [uses](https://open.substack.com/pub/andymasley/p/a-cheat-sheet-for-conversations-about?utm_source=share&utm_medium=android&r=1rrrnf) Google's report that an average prompt uses about 2 mL of water. That's mostly from the power generator. The data center itself uses 0.3mL per prompt.\n\nThe median American has more than a [400 gallon per day](https://hess.copernicus.org/articles/22/3007/2018/) water foot print.\n\nUC Riverside [study](https://arxiv.org/pdf/2304.03271) estimates 16.9 mL per prompt.\n\nMaking AI Less “Thirsty”: Uncovering and Addressing the\n\nSecret Water Footprint of AI Models\n\nPengfei Li\n\nUC Riverside\n\nJianyi Yang\n\nUC Riverside\n\nMohammad A. Islam\n\nUT Arlington\n\nShaolei Ren\n\nUC Riverside",
       "sources": [],
       "images": [],
       "coverImage": null,

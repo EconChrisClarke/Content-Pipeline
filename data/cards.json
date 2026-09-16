@@ -7,7 +7,7 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "Andy Masley uses Google's report that an average prompt uses about 2 mL of water. That's mostly from the power generator. The data center itself uses 0.3mL per prompt.",
       "sources": [],
       "images": [],
       "coverImage": null,

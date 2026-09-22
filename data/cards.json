@@ -7,9 +7,13 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "![](data/images/cy20qojr-1790058839313-v18j.png)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cy20qojr-1790058839313-v18j.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

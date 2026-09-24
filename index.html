@@ -299,6 +299,13 @@ function migrateLegacyStages(cards){
       if(!hadThreadsFb && c.platforms.instagram && c.platforms.instagram.caption){
         c.platforms.threads_fb.caption = c.platforms.instagram.caption;
       }
+      // Backfill the YouTube-specific title field onto cards saved before
+      // it existed -- leave it empty rather than pre-filling with the
+      // card's own title, so the UI's "using the card title" fallback note
+      // stays accurate until someone actually sets one.
+      if(c.platforms.youtube && c.platforms.youtube.title === undefined){
+        c.platforms.youtube.title = '';
+      }
     }
   });
   return cards;
@@ -944,6 +951,12 @@ function newPlatformState(){
     o[p.key] = p.isSubstack
       ? {status:'not_started', draft:'', link:''}
       : {status:'not_started', caption:'', link:''};
+    // YouTube is the one platform with a real, separate "Title" field in
+    // its own API (distinct from the description/caption) -- unlike
+    // Instagram/TikTok, which only ever take a caption. Defaults to empty
+    // so the UI can fall back to the card's own title until someone
+    // overrides it specifically for YouTube.
+    if(p.isYouTube) o[p.key].title = '';
   });
   return o;
 }
@@ -1057,6 +1070,43 @@ function renderTagFilter(){
 
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// The link field itself stays a plain, editable text input (so a link can be
+// pasted in manually or corrected) -- but a saved value with nothing to
+// click on it was confusing: clicking the text just puts your cursor in the
+// box, since it's a text input, not a hyperlink. When there IS a value, this
+// adds a small real <a target="_blank"> right next to the input so the
+// person can actually open it in one click, without changing how the input
+// itself behaves.
+// Fires a native browser notification when a post finishes (success or
+// failure) so the person doesn't have to keep the card's tab in view while
+// Instagram/YouTube take their sweet time processing a video. This only
+// works while the browser itself is open (even if a different tab is
+// active) -- it can't reach a phone after the browser/app is fully closed,
+// since that needs a push server this static, no-backend app doesn't have.
+// Permission is requested lazily, the first time a post actually finishes,
+// rather than nagging on page load; if the person denies it once, we don't
+// ask again this session (re-asking on every post would be annoying and
+// the browser would silently ignore it anyway once denied).
+function notifyPostResult(title, body){
+  if(!('Notification' in window)) return; // unsupported browser -- fail silent, the on-screen status message still shows
+  const fire = ()=>{ try{ new Notification(title, {body: body, icon: undefined}); }catch(e){ /* not fatal */ } };
+  if(Notification.permission === 'granted'){
+    fire();
+  } else if(Notification.permission !== 'denied'){
+    Notification.requestPermission().then(p=>{ if(p === 'granted') fire(); });
+  }
+}
+
+function linkFieldHtml(platKey, link, placeholder){
+  const openLink = link
+    ? ' <a href="'+escapeHtml(link)+'" target="_blank" rel="noopener" class="small-btn" style="text-decoration:none;white-space:nowrap;">Open ↗</a>'
+    : '';
+  return '<div style="display:flex;gap:6px;align-items:center;margin-top:0;">' +
+    '<input type="text" style="flex:1;" placeholder="'+escapeHtml(placeholder)+'" data-plat="'+platKey+'" data-field="link" value="'+escapeHtml(link)+'">' +
+    openLink +
+  '</div>';
 }
 
 function cardEl(c){
@@ -1436,6 +1486,7 @@ async function postVideoToBluesky(card, file, statusEl){
     card.platforms.bsky.status = 'posted';
     card.platforms.bsky.link = postUrl || card.platforms.bsky.link;
     setSyncStatus('ok', 'Posted to Bluesky.');
+    notifyPostResult('Posted to Bluesky', card.title + (postUrl ? '\n' + postUrl : ''));
     // renderModal() rebuilds the whole platform-row markup from card data,
     // which would wipe out a message set on the OLD statusEl -- so render
     // first, then grab the freshly-created status element and message it.
@@ -1447,6 +1498,7 @@ async function postVideoToBluesky(card, file, statusEl){
     const msg = (err && err.message) ? err.message : 'Something went wrong posting to Bluesky.';
     if(statusEl) statusEl.textContent = msg;
     setSyncStatus('bad', msg);
+    notifyPostResult('Bluesky post failed', card.title + '\n' + msg);
   }
 }
 
@@ -1628,9 +1680,10 @@ async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
     const accessToken = await ytGetAccessToken();
 
     if(statusEl) statusEl.textContent = 'Starting upload…';
+    const ytTitle = (card.platforms.youtube && card.platforms.youtube.title) || card.title || 'Untitled';
     const uploadUrl = await ytStartResumableUpload(accessToken, videoFile, {
       snippet: {
-        title: card.title || 'Untitled',
+        title: ytTitle,
         description,
         categoryId: YT_CATEGORY_ID
       },
@@ -1652,6 +1705,7 @@ async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
     card.platforms.youtube.status = 'posted';
     card.platforms.youtube.link = watchUrl;
     setSyncStatus('ok', 'Posted to YouTube.');
+    notifyPostResult('Posted to YouTube', card.title + '\n' + watchUrl);
     // Same reasoning as the Bluesky flow above: renderModal() rebuilds the
     // platform-row markup fresh from card data, wiping any message set on
     // the OLD statusEl -- render first, then message the new element.
@@ -1663,6 +1717,7 @@ async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
     const msg = (err && err.message) ? err.message : 'Something went wrong posting to YouTube.';
     if(statusEl) statusEl.textContent = msg;
     setSyncStatus('bad', msg);
+    notifyPostResult('YouTube post failed', card.title + '\n' + msg);
   }
 }
 
@@ -1772,6 +1827,7 @@ async function postVideoToInstagram(card, file, statusEl){
     card.platforms.instagram.status = 'posted';
     card.platforms.instagram.link = permalink || ('https://www.instagram.com/p/' + mediaId);
     setSyncStatus('ok', 'Posted to Instagram.');
+    notifyPostResult('Posted to Instagram', card.title + '\n' + card.platforms.instagram.link);
     // Same reasoning as the Bluesky/YouTube flows above: renderModal()
     // rebuilds the platform-row markup fresh from card data, wiping any
     // message set on the OLD statusEl -- render first, then message the
@@ -1784,6 +1840,7 @@ async function postVideoToInstagram(card, file, statusEl){
     const msg = (err && err.message) ? err.message : 'Something went wrong posting to Instagram.';
     if(statusEl) statusEl.textContent = msg;
     setSyncStatus('bad', msg);
+    notifyPostResult('Instagram post failed', card.title + '\n' + msg);
   }
 }
 
@@ -3231,7 +3288,7 @@ function renderModal(){
             : '') +
           '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script</button>' +
           '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
-          '<input type="text" placeholder="Published link" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          linkFieldHtml(p.key, st.link, 'Published link') +
         '</div>';
       } else if(p.isBluesky){
         const count = st.caption.length;
@@ -3247,7 +3304,7 @@ function renderModal(){
           '<input type="file" id="bskyVideoInput" accept="video/*" style="display:none">' +
           '<button class="primary" type="button" id="postBlueskyBtn" style="margin-top:8px;width:100%;">🦋 Post video to Bluesky</button>' +
           '<div class="note" id="bskyPostStatus" style="margin-top:4px;"></div>' +
-          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
         '</div>';
       } else if(p.isYouTube){
         const count = st.caption.length;
@@ -3257,14 +3314,15 @@ function renderModal(){
             '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
             '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
           '</select></div>' +
+          '<input type="text" data-plat="'+p.key+'" data-field="title" placeholder="YouTube title (leave blank to use: '+escapeHtml(c.title||'Untitled')+')" value="'+escapeHtml(st.title)+'" style="margin-bottom:8px;">' +
           '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Description for YouTube (hashtags OK)">'+escapeHtml(st.caption)+'</textarea>' +
           '<div class="charcount">'+count+'</div>' +
-          '<div class="note">Uses the card title as the YouTube title. Under 3 minutes → posted as a Short with an auto thumbnail (video\'s first frame). 3 minutes or longer → a regular video, and you\'ll be asked to pick your own horizontal thumbnail before it uploads.</div>' +
+          '<div class="note">Set a YouTube-specific title above, or leave it blank to just use the card\'s own title. Under 3 minutes → posted as a Short with an auto thumbnail (video\'s first frame). 3 minutes or longer → a regular video, and you\'ll be asked to pick your own horizontal thumbnail before it uploads.</div>' +
           '<input type="file" id="ytVideoInput" accept="video/*" style="display:none">' +
           '<input type="file" id="ytThumbInput" accept="image/*" style="display:none">' +
           '<button class="primary" type="button" id="postYoutubeBtn" style="margin-top:8px;width:100%;">▶ Post video to YouTube</button>' +
           '<div class="note" id="ytPostStatus" style="margin-top:4px;"></div>' +
-          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
         '</div>';
       } else if(p.isInstagram){
         const count = st.caption.length;
@@ -3281,7 +3339,7 @@ function renderModal(){
           '<input type="file" id="igVideoInput" accept="video/*" style="display:none">' +
           '<button class="primary" type="button" id="postInstagramBtn" style="margin-top:8px;width:100%;">📷 Post video to Instagram</button>' +
           '<div class="note" id="igPostStatus" style="margin-top:4px;"></div>' +
-          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
         '</div>';
       } else {
         const count = st.caption.length;
@@ -3294,7 +3352,7 @@ function renderModal(){
           '</select></div>' +
           '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for '+p.label+'">'+escapeHtml(st.caption)+'</textarea>' +
           '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
-          '<input type="text" placeholder="Link once live" data-plat="'+p.key+'" data-field="link" value="'+escapeHtml(st.link)+'">' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
         '</div>';
       }
     });

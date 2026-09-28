@@ -1,8 +1,8 @@
 {
   "cards": [
     {
-      "id": "cy20qojr",
-      "title": "China and Solow",
+      "id": "cv61czh4",
+      "title": "Diesel Export Ban",
       "subtitle": "",
       "tags": [],
       "stage": "capture",
@@ -37,6 +37,62 @@
           "status": "not_started",
           "caption": "",
           "link": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-09-28"
+    },
+    {
+      "id": "cy20qojr",
+      "title": "China and Solow",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "How much more will China's economy grow? Are they slowing down? Are they speeding up?\n\nPresident Xi Jinping visited the White House this week renews questions of geopolitcial trajectory in the 21st century. The United States and Chinese economies are similar size in magnitude.\n\n![](data/images/cy20qojr-1790058839313-v18j.png)",
+      "sources": [],
+      "images": [
+        {
+          "path": "data/images/cy20qojr-1790058839313-v18j.png"
+        }
+      ],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -87,7 +143,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -138,7 +195,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -215,7 +273,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "Do poor families get $181k from the government? No. Government support also goes to those struggling who are above the \"official\" poverty line. Balancing the budget on the backs of the more vulnerable among us is plain wicked, in my opinion.\n\n#budget #economy #government #money #economics ",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -276,7 +335,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -331,7 +391,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -426,7 +487,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -498,7 +560,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -548,7 +611,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -597,7 +661,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -646,7 +711,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -695,7 +761,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -784,7 +851,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",

@@ -218,6 +218,19 @@
   .wordcount-text{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
   .wordcount-text.status-ok{color:var(--accent);font-weight:600;}
   .wordcount-text.status-low, .wordcount-text.status-high{color:var(--gold);font-weight:600;}
+  .gi-note{font-size:13px;color:var(--ink-soft);margin:0 0 12px;line-height:1.45;}
+  .gi-bad{color:#b3261e;}
+  .gi-repos{display:flex;flex-direction:column;gap:8px;}
+  .gi-repo{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:13px 14px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);cursor:pointer;font-family:var(--font-body);}
+  .gi-repo:hover{background:var(--accent-soft);}
+  .gi-repo-name{font-weight:600;font-size:15px;}
+  .gi-repo-meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);}
+  .gi-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .gi-row{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;line-height:1.4;}
+  .gi-row:last-child{border-bottom:none;}
+  .gi-row input{width:20px;height:20px;flex:0 0 auto;margin:0;accent-color:var(--accent);}
+  .gi-num{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);}
+  .gi-log{display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.4;}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
 </style>
 </head>
@@ -239,6 +252,7 @@
       <input type="text" id="quickInput" placeholder="Plop an idea in&hellip; (title only, refine later)">
       <button class="primary" id="quickAdd">Add</button>
     </div>
+    <button class="ghost" id="importGraphsBtn">Import graphs</button>
     <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, footnotes&hellip;"></div>
     <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Filter tags&hellip;">
     <div class="tagfilter" id="tagfilter"></div>
@@ -256,6 +270,9 @@
   </div>
   <div class="overlay" id="cropOverlay-el" style="z-index:35;">
     <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
+  </div>
+  <div class="overlay" id="graphImportOverlay" style="z-index:33;">
+    <div class="modal" id="graphImportModal" style="max-width:560px;"></div>
   </div>
 </div>
 
@@ -1177,6 +1194,326 @@ function quickAdd(){
   input.value = '';
   saveToGitHub();
 }
+
+// ---- import graphs from a chart repo ----
+// Christopher's chart repos (OilMarkets, ChinaGrowth, Graph-Repository, ...)
+// don't hold PNG files. Each graph is one interactive HTML page that draws
+// itself on a canvas and has "Substack 1456" / "Vertical 9:16" view buttons
+// plus a "Download PNG" button. Each repo's README lists its published graphs
+// in a markdown table with a "Live page" column, so that table decides what
+// counts as a graph and in what order.
+// The chart pages and this board are both served from
+// econchrisclarke.github.io, which makes them the same origin. So this page
+// can load a chart page in a hidden iframe, press its own view and download
+// buttons, and catch the PNG it hands back instead of letting it download.
+// Nothing in the chart repos has to change.
+// Flow: pick one of the 3 most recently pushed chart repos -> checklist (all
+// checked) -> a new Capture card titled with the repo name, with each
+// Substack PNG copied into data/images/ and placed inline in the script with
+// the caption "Interactive version" linked to its landing page -> each
+// vertical PNG downloads to the device as its own file.
+const GRAPH_REPO_SCAN_LIMIT = 15;   // recent repos to check for a README graph table
+const GRAPH_REPO_PICK_COUNT = 3;
+let graphImport = null;             // {step, repos, repo, graphs, log, verticals}
+
+function giOwner(){ return (ghConfig && ghConfig.owner) || 'EconChrisClarke'; }
+
+// Finds the first markdown table in a README whose header has a "Live page"
+// column, and returns one {n, title, url} per row, in table order.
+function parseGraphTable(readme){
+  const lines = String(readme || '').split('\n');
+  const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(s=>s.trim());
+  for(let i = 0; i < lines.length; i++){
+    if(!/^\s*\|/.test(lines[i])) continue;
+    const head = cells(lines[i]).map(h=>h.toLowerCase());
+    const liveIdx = head.findIndex(h=>h.includes('live page'));
+    if(liveIdx === -1) continue;
+    let titleIdx = head.findIndex(h=>/^(chart|graph|map|title|figure)s?$/.test(h));
+    if(titleIdx === -1) titleIdx = head.findIndex((h, k)=>k !== liveIdx && h !== '#' && h !== '');
+    const rows = [];
+    for(let j = i + 1; j < lines.length && /^\s*\|/.test(lines[j]); j++){
+      const r = cells(lines[j]);
+      if(r.every(c=>/^:?-{2,}:?$/.test(c) || c === '')) continue; // the |---|---| divider row
+      const m = /\]\((https?:\/\/[^)\s]+\.html)\)/.exec(r[liveIdx] || '') || /(https?:\/\/\S+\.html)/.exec(r[liveIdx] || '');
+      if(!m) continue;
+      const title = (r[titleIdx] || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').trim();
+      rows.push({n: rows.length + 1, title: title || m[1].split('/').pop(), url: m[1]});
+    }
+    if(rows.length) return rows;
+  }
+  return [];
+}
+
+async function giFetchRecentChartRepos(){
+  const owner = giOwner();
+  const headers = {'Accept':'application/vnd.github+json'};
+  let res = await fetch('https://api.github.com/users/' + encodeURIComponent(owner) + '/repos?sort=pushed&per_page=' + GRAPH_REPO_SCAN_LIMIT, {headers});
+  if(!res.ok) throw new Error('GitHub would not list your repositories (HTTP ' + res.status + ').');
+  const repos = (await res.json()).filter(r=>!r.private && !r.fork && !(ghConfig && r.name.toLowerCase() === String(ghConfig.repo).toLowerCase()));
+  const found = [];
+  for(const r of repos){
+    if(found.length >= GRAPH_REPO_PICK_COUNT) break;
+    try{
+      const rd = await fetch('https://raw.githubusercontent.com/' + owner + '/' + r.name + '/' + r.default_branch + '/README.md?t=' + Date.now());
+      if(!rd.ok) continue;
+      const graphs = parseGraphTable(await rd.text());
+      if(graphs.length) found.push({name: r.name, pushedAt: r.pushed_at, graphs});
+    }catch(e){ /* skip repos whose README can't be read */ }
+  }
+  return found;
+}
+
+// Loads one chart page in a hidden same-origin iframe and returns a PNG blob
+// for each requested view ('substack', 'vertical'), using the page's own
+// view buttons and its own Download PNG button, so the images are exactly
+// what that button would give.
+async function giRenderChart(url, modes){
+  const target = new URL(url, location.href);
+  if(target.origin !== location.origin){
+    throw new Error('This chart page is on ' + target.origin + ', not this page\'s address (' + location.origin + '), so the board isn\'t allowed to read it.');
+  }
+  const probe = await fetch(target.href, {cache: 'no-store'}).catch(()=>null);
+  if(!probe || !probe.ok) throw new Error(probe ? 'page not found (HTTP ' + probe.status + ')' : 'page could not be reached');
+  const f = document.createElement('iframe');
+  f.setAttribute('aria-hidden', 'true');
+  f.tabIndex = -1;
+  f.style.cssText = 'position:fixed;left:-20000px;top:0;width:1500px;height:1100px;border:0;visibility:hidden;';
+  const loaded = new Promise((resolve, reject)=>{ f.onload = resolve; f.onerror = ()=>reject(new Error('page did not load')); });
+  f.src = target.href;
+  document.body.appendChild(f);
+  const sleep = ms => new Promise(r=>setTimeout(r, ms));
+  try{
+    await Promise.race([loaded, sleep(30000).then(()=>{ throw new Error('page took too long to load'); })]);
+    const w = f.contentWindow, d = w.document;
+    if(d.fonts && d.fonts.ready) await d.fonts.ready;
+    let tries = 0;
+    while(!(d.getElementById('dl') && d.querySelector('[data-m="vertical"]')) && tries++ < 50) await sleep(200);
+    if(!d.getElementById('dl')) throw new Error('no Download PNG button on this page');
+    await sleep(400);
+    let captured = null;
+    const origClick = w.HTMLAnchorElement.prototype.click;
+    w.HTMLAnchorElement.prototype.click = function(){
+      if(this.hasAttribute('download')){ captured = this.href; return; }
+      return origClick.call(this);
+    };
+    const out = {};
+    for(const mode of modes){
+      const btn = d.querySelector('[data-m="' + mode + '"]');
+      if(!btn) throw new Error('no "' + mode + '" view on this page');
+      btn.click();
+      await sleep(350);
+      captured = null;
+      d.getElementById('dl').click();
+      for(let k = 0; !captured && k < 50; k++) await sleep(100);
+      if(!captured) throw new Error('the page did not produce a ' + mode + ' PNG');
+      out[mode] = await (await fetch(captured)).blob();
+    }
+    return out;
+  } finally {
+    f.remove();
+  }
+}
+
+function giBlobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const r = new FileReader();
+    r.onload = ()=>resolve(String(r.result).split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+function giSlug(s){ return String(s || 'graph').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'graph'; }
+
+function openGraphImport(){
+  graphImport = {step: 'repos', repos: null, repo: null, graphs: [], log: [], verticals: [], error: ''};
+  document.getElementById('graphImportOverlay').classList.add('open');
+  renderGraphImport();
+  giFetchRecentChartRepos().then(repos=>{
+    if(!graphImport) return;
+    graphImport.repos = repos;
+    renderGraphImport();
+  }).catch(err=>{
+    if(!graphImport) return;
+    graphImport.error = err.message || String(err);
+    renderGraphImport();
+  });
+}
+function closeGraphImport(){
+  if(graphImport && graphImport.step === 'working') return; // don't abandon a half-finished import
+  document.getElementById('graphImportOverlay').classList.remove('open');
+  document.getElementById('graphImportModal').innerHTML = '';
+  graphImport = null;
+}
+
+function renderGraphImport(){
+  const m = document.getElementById('graphImportModal');
+  const g = graphImport;
+  if(!g){ m.innerHTML = ''; return; }
+  m.innerHTML = '';
+  const h = document.createElement('h2');
+  m.appendChild(h);
+  const body = document.createElement('div');
+  m.appendChild(body);
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  const left = document.createElement('div'); left.className = 'left';
+  const right = document.createElement('div'); right.className = 'left';
+  actions.appendChild(left); actions.appendChild(right);
+  m.appendChild(actions);
+  const btn = (label, cls, fn)=>{ const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; return b; };
+
+  if(g.step === 'repos'){
+    h.textContent = 'Import graphs: pick a repository';
+    if(g.error){
+      body.innerHTML = '<p class="gi-note gi-bad"></p>';
+      body.firstChild.textContent = g.error;
+    } else if(!g.repos){
+      body.innerHTML = '<p class="gi-note">Looking up your most recently updated chart repositories&hellip;</p>';
+    } else if(!g.repos.length){
+      body.innerHTML = '<p class="gi-note">None of your recent repositories has a README table with a &ldquo;Live page&rdquo; column, so there are no graphs to import.</p>';
+    } else {
+      const list = document.createElement('div'); list.className = 'gi-repos';
+      g.repos.forEach(r=>{
+        const b = document.createElement('button');
+        b.className = 'gi-repo';
+        const when = r.pushedAt ? new Date(r.pushedAt).toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '';
+        b.innerHTML = '<span class="gi-repo-name"></span><span class="gi-repo-meta"></span>';
+        b.querySelector('.gi-repo-name').textContent = r.name;
+        b.querySelector('.gi-repo-meta').textContent = r.graphs.length + ' graph' + (r.graphs.length === 1 ? '' : 's') + (when ? ' · updated ' + when : '');
+        b.onclick = ()=>{ g.repo = r; g.graphs = r.graphs.map(x=>Object.assign({checked: true}, x)); g.step = 'pick'; renderGraphImport(); };
+        list.appendChild(b);
+      });
+      body.appendChild(list);
+    }
+    left.appendChild(btn('Cancel', 'ghost', closeGraphImport));
+  }
+
+  else if(g.step === 'pick'){
+    h.textContent = g.repo.name + ': choose graphs';
+    const note = document.createElement('p'); note.className = 'gi-note';
+    note.textContent = 'Everything is checked. Uncheck any graph you don\'t want.';
+    body.appendChild(note);
+    const list = document.createElement('div'); list.className = 'gi-list';
+    g.graphs.forEach(x=>{
+      const row = document.createElement('label'); row.className = 'gi-row';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = x.checked;
+      cb.onchange = ()=>{ x.checked = cb.checked; updateCount(); };
+      const txt = document.createElement('span'); txt.className = 'gi-row-text';
+      txt.innerHTML = '<span class="gi-num"></span> <span class="gi-title"></span>';
+      txt.querySelector('.gi-num').textContent = x.n + '.';
+      txt.querySelector('.gi-title').textContent = x.title;
+      row.appendChild(cb); row.appendChild(txt);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+    if(!syncEnabled || !ghConfig){
+      const warn = document.createElement('p'); warn.className = 'gi-note gi-bad';
+      warn.textContent = 'Connect to GitHub in Settings first. The Substack images are saved into your Content-Pipeline repo.';
+      body.appendChild(warn);
+    }
+    const go = btn('', 'primary', ()=>runGraphImport());
+    go.id = 'giGo';
+    function updateCount(){
+      const n = g.graphs.filter(x=>x.checked).length;
+      go.textContent = 'Import ' + n + ' graph' + (n === 1 ? '' : 's');
+      go.disabled = !n || !syncEnabled || !ghConfig;
+    }
+    updateCount();
+    left.appendChild(btn('Back', 'ghost', ()=>{ g.step = 'repos'; renderGraphImport(); }));
+    right.appendChild(go);
+  }
+
+  else if(g.step === 'working' || g.step === 'done'){
+    h.textContent = g.step === 'working' ? 'Importing ' + g.repo.name + '…' : 'Imported ' + g.repo.name;
+    const log = document.createElement('div'); log.className = 'gi-log';
+    g.log.forEach(line=>{
+      const p = document.createElement('div');
+      p.className = 'gi-logline' + (line.bad ? ' gi-bad' : '');
+      p.textContent = line.text;
+      log.appendChild(p);
+    });
+    body.appendChild(log);
+    if(g.step === 'done'){
+      if(g.verticals.length){
+        const p = document.createElement('p'); p.className = 'gi-note';
+        p.textContent = 'If your browser asked whether to allow several downloads, allow it, then tap below to download them again.';
+        body.appendChild(p);
+        left.appendChild(btn('Download vertical graphs again', 'ghost', ()=>giDownloadVerticals(g.verticals)));
+      }
+      right.appendChild(btn('Open card', 'primary', ()=>{ const id = g.cardId; closeGraphImport(); if(id) openModal(id); }));
+      if(!g.cardId) right.lastChild.textContent = 'Close';
+    }
+  }
+}
+
+function giLog(text, bad){
+  if(!graphImport) return;
+  graphImport.log.push({text, bad: !!bad});
+  renderGraphImport();
+}
+
+async function giDownloadVerticals(verticals){
+  for(const v of verticals){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(v.blob);
+    a.download = v.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
+    await new Promise(r=>setTimeout(r, 700)); // spacing so the browser treats them as separate downloads
+  }
+}
+
+async function runGraphImport(){
+  const g = graphImport;
+  if(!g || g.step !== 'pick') return;
+  const chosen = g.graphs.filter(x=>x.checked);
+  if(!chosen.length || !syncEnabled || !ghConfig) return;
+  g.step = 'working';
+  g.log = [];
+  g.verticals = [];
+  renderGraphImport();
+  const card = makeCard({title: g.repo.name, stage: 'capture'});
+  card.graphSource = {repo: g.repo.name, owner: giOwner(), importedAt: new Date().toISOString(), graphs: []};
+  const blocks = [];
+  for(let i = 0; i < chosen.length; i++){
+    const x = chosen[i];
+    giLog('(' + (i+1) + '/' + chosen.length + ') ' + x.title);
+    try{
+      const pngs = await giRenderChart(x.url, ['substack', 'vertical']);
+      const path = 'data/images/' + card.id + '-graph' + x.n + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.png';
+      localImageBlobs.set(path, URL.createObjectURL(pngs.substack));
+      await ghPutBinaryFile(path, await giBlobToBase64(pngs.substack), 'Add graph image for card ' + card.id);
+      card.images.push({path});
+      card.graphSource.graphs.push({n: x.n, title: x.title, url: x.url, image: path});
+      blocks.push(scriptImageTag(path, '[Interactive version](' + x.url + ')'));
+      g.verticals.push({blob: pngs.vertical, name: giSlug(g.repo.name) + '-' + String(x.n).padStart(2, '0') + '-' + giSlug(x.title).slice(0, 40) + '-vertical.png'});
+      g.log[g.log.length - 1].text += ': done';
+    }catch(err){
+      g.log[g.log.length - 1].text += ': skipped (' + ((err && (err.message || err.code)) || 'error') + ')';
+      g.log[g.log.length - 1].bad = true;
+    }
+    renderGraphImport();
+  }
+  if(blocks.length){
+    card.script = blocks.join('\n\n');
+    state.cards.unshift(card);
+    g.cardId = card.id;
+    await saveToGitHub();
+    giLog('New card "' + card.title + '" added to Capture with ' + blocks.length + ' Substack graph' + (blocks.length === 1 ? '' : 's') + '.');
+    giLog('Downloading ' + g.verticals.length + ' vertical graph' + (g.verticals.length === 1 ? '' : 's') + ' to this device…');
+    g.step = 'done';
+    renderGraphImport();
+    await giDownloadVerticals(g.verticals);
+  } else {
+    g.step = 'done';
+    giLog('No graphs could be imported, so no card was created.', true);
+  }
+}
+
+document.getElementById('importGraphsBtn').onclick = openGraphImport;
+document.getElementById('graphImportOverlay').addEventListener('click', e=>{ if(e.target.id === 'graphImportOverlay') closeGraphImport(); });
 
 // ---- modal / card detail ----
 

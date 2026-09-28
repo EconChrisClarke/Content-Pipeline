@@ -1,15 +1,43 @@
 {
   "cards": [
     {
-      "id": "cv61czh4",
-      "title": "Diesel Export Ban",
+      "id": "cu09f8ow",
+      "title": "OilMarkets",
       "subtitle": "",
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "![[Interactive version](https://econchrisclarke.github.io/OilMarkets/diesel-exports-2024.html)](data/images/cu09f8ow-graph1-1790637053679-rk3j.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/gulf-diesel-2024.html)](data/images/cu09f8ow-graph3-1790637058354-wqcv.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/diesel-gasoline-margins.html)](data/images/cu09f8ow-graph4-1790637062023-el0e.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/padd-diesel-2024.html)](data/images/cu09f8ow-graph5-1790637066663-4eci.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/gulf-diesel-war.html)](data/images/cu09f8ow-graph6-1790637070164-eyas.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/padd-diesel-2024-bars.html)](data/images/cu09f8ow-graph7-1790637074673-2ar6.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/pipelines-us.html)](data/images/cu09f8ow-graph8-1790637078424-yzqs.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/pipeline-utilization.html)](data/images/cu09f8ow-graph10-1790637082256-0y7e.png)\n\n![[Interactive version](https://econchrisclarke.github.io/OilMarkets/pipeline-east-coast-monthly.html)](data/images/cu09f8ow-graph11-1790637085471-ku7q.png)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cu09f8ow-graph1-1790637053679-rk3j.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph3-1790637058354-wqcv.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph4-1790637062023-el0e.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph5-1790637066663-4eci.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph6-1790637070164-eyas.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph7-1790637074673-2ar6.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph8-1790637078424-yzqs.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph10-1790637082256-0y7e.png"
+        },
+        {
+          "path": "data/images/cu09f8ow-graph11-1790637085471-ku7q.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {
@@ -36,7 +64,8 @@
         "youtube": {
           "status": "not_started",
           "caption": "",
-          "link": ""
+          "link": "",
+          "title": ""
         },
         "bsky": {
           "status": "not_started",
@@ -49,7 +78,68 @@
           "link": ""
         }
       },
-      "createdAt": "2026-09-28"
+      "createdAt": "2026-09-28",
+      "graphSource": {
+        "repo": "OilMarkets",
+        "owner": "EconChrisClarke",
+        "importedAt": "2026-09-28T23:10:50.857Z",
+        "graphs": [
+          {
+            "n": 1,
+            "title": "The US exports 1.2 million barrels of diesel a day, mostly from the Gulf",
+            "url": "https://econchrisclarke.github.io/OilMarkets/diesel-exports-2024.html",
+            "image": "data/images/cu09f8ow-graph1-1790637053679-rk3j.png"
+          },
+          {
+            "n": 3,
+            "title": "The Gulf Coast sends more diesel abroad than to the rest of the US",
+            "url": "https://econchrisclarke.github.io/OilMarkets/gulf-diesel-2024.html",
+            "image": "data/images/cu09f8ow-graph3-1790637058354-wqcv.png"
+          },
+          {
+            "n": 4,
+            "title": "Post-Covid fuel price shocks come from refining limits more than crude, unlike 2008",
+            "url": "https://econchrisclarke.github.io/OilMarkets/diesel-gasoline-margins.html",
+            "image": "data/images/cu09f8ow-graph4-1790637062023-el0e.png"
+          },
+          {
+            "n": 5,
+            "title": "Most regions refine their own diesel; the East Coast relies on the Gulf Coast",
+            "url": "https://econchrisclarke.github.io/OilMarkets/padd-diesel-2024.html",
+            "image": "data/images/cu09f8ow-graph5-1790637066663-4eci.png"
+          },
+          {
+            "n": 6,
+            "title": "Gulf diesel exports to the world fell after the war began",
+            "url": "https://econchrisclarke.github.io/OilMarkets/gulf-diesel-war.html",
+            "image": "data/images/cu09f8ow-graph6-1790637070164-eyas.png"
+          },
+          {
+            "n": 7,
+            "title": "Diesel is usually refined in the region it is consumed, except the Gulf and East coast",
+            "url": "https://econchrisclarke.github.io/OilMarkets/padd-diesel-2024-bars.html",
+            "image": "data/images/cu09f8ow-graph7-1790637074673-2ar6.png"
+          },
+          {
+            "n": 8,
+            "title": "Fuel pipelines crowd the Gulf-to-East Coast corridor; the West has few",
+            "url": "https://econchrisclarke.github.io/OilMarkets/pipelines-us.html",
+            "image": "data/images/cu09f8ow-graph8-1790637078424-yzqs.png"
+          },
+          {
+            "n": 10,
+            "title": "Colonial, the main fuel line from the Gulf to the East Coast, runs full",
+            "url": "https://econchrisclarke.github.io/OilMarkets/pipeline-utilization.html",
+            "image": "data/images/cu09f8ow-graph10-1790637082256-0y7e.png"
+          },
+          {
+            "n": 11,
+            "title": "Pipeline shipments from the Gulf to the East Coast peak every winter",
+            "url": "https://econchrisclarke.github.io/OilMarkets/pipeline-east-coast-monthly.html",
+            "image": "data/images/cu09f8ow-graph11-1790637085471-ku7q.png"
+          }
+        ]
+      }
     },
     {
       "id": "cy20qojr",
@@ -58,13 +148,9 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "How much more will China's economy grow? Are they slowing down? Are they speeding up?\n\nPresident Xi Jinping visited the White House this week renews questions of geopolitcial trajectory in the 21st century. The United States and Chinese economies are similar size in magnitude.\n\n![](data/images/cy20qojr-1790058839313-v18j.png)",
+      "script": "",
       "sources": [],
-      "images": [
-        {
-          "path": "data/images/cy20qojr-1790058839313-v18j.png"
-        }
-      ],
+      "images": [],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

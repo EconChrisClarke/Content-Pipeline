@@ -38,7 +38,9 @@
           "path": "data/images/cu09f8ow-graph11-1790637085471-ku7q.png"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/cu09f8ow-cover-1790637272707-e1m2.png"
+      },
       "baseCaption": "",
       "platforms": {
         "tiktok": {

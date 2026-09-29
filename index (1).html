@@ -1,0 +1,3663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Google Identity Services: used only for the "Post video to YouTube" button
+     to get a short-lived OAuth access token (youtube.upload scope) straight
+     in the browser -- no server, no client secret, no refresh token stored.
+     See ytGetAccessToken() below. -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  /* Palette and type match Christopher's econ-chart-style house brand:
+     brand red #C71E1D, navy/amber/teal/plum as the series colors, the
+     "house rose" #FFF1F2 background, Fraunces for display type, Inter for
+     body. --danger deliberately stays its own color rather than reusing
+     brand red — the style spec is explicit that the red is a neutral brand
+     mark, not a "bad" signal, so true error states need a color of their own. */
+  :root{
+    --paper:#fff1f2; --surface:#ffffff; --ink:#111827; --ink-soft:#6b7280;
+    --line:#e4d8db; --accent:#c71e1d; --accent-soft:#f2e5e7;
+    --gold:#e8a33d; --gold-soft:#fcf1e2; --danger:#a13d2e; --danger-soft:#f5ddd6;
+    --stage-capture:#6b7280; --stage-scripted:#2e8b7a; --stage-dist:#1b3a5c;
+    --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1b1615; --surface:#241c1a; --ink:#f2e8e6; --ink-soft:#b9a9a5;
+      --line:#3a2d2a; --accent:#ef5b52; --accent-soft:#3a201d;
+      --gold:#f0b968; --gold-soft:#3a2c15; --danger:#e0836f; --danger-soft:#3a231e;
+      --stage-capture:#b9a9a5; --stage-scripted:#5fc2ae; --stage-dist:#6f93bd;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1b1615; --surface:#241c1a; --ink:#f2e8e6; --ink-soft:#b9a9a5;
+    --line:#3a2d2a; --accent:#ef5b52; --accent-soft:#3a201d;
+    --gold:#f0b968; --gold-soft:#3a2c15; --danger:#e0836f; --danger-soft:#3a231e;
+    --stage-capture:#b9a9a5; --stage-scripted:#5fc2ae; --stage-dist:#6f93bd;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  header{padding:20px 26px 8px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:25;}
+  header .titlerow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  header h1{margin:0 0 3px;font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:.01em;text-wrap:balance;}
+  header p{margin:0 0 9px;color:var(--ink-soft);font-size:13px;}
+  .syncline{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);padding-bottom:11px;display:flex;align-items:center;gap:6px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-soft);display:inline-block;flex-shrink:0;}
+  .dot.ok{background:var(--accent);}
+  .dot.bad{background:var(--danger);}
+  .toolbar{display:flex;gap:10px;align-items:center;padding:12px 26px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:74px;z-index:4;}
+  .searchbox{flex:1 1 200px;min-width:160px;}
+  .searchbox input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .tagfilter{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .tag-search-input{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12px;font-family:var(--font-body);background:var(--paper);color:var(--ink);min-width:110px;flex:0 1 140px;}
+  .chip-more{background:transparent;border-style:dashed;cursor:pointer;font-style:italic;}
+  .chip-more:hover{background:var(--accent-soft);}
+  .chip{border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);border-radius:999px;padding:4px 11px;font-size:12px;cursor:pointer;user-select:none;}
+  .chip.active{background:var(--accent);color:var(--surface);border-color:var(--accent);}
+  .spacer{flex:1;}
+  .quickadd{display:flex;gap:6px;flex:1 1 260px;min-width:220px;}
+  .quickadd input{flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  button.primary{background:var(--accent);color:var(--surface);border:none;border-radius:7px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  button.primary:hover{opacity:.88;}
+  button.primary:disabled{opacity:.5;cursor:default;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px 14px;font-size:13px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  button.ghost:hover{background:var(--accent-soft);}
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .chip:focus-visible, .card:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px 26px;align-items:start;}
+  @media (max-width:1000px){.board{grid-template-columns:1fr 1fr;}}
+  @media (max-width:600px){.board{grid-template-columns:1fr;}}
+  .col{background:var(--surface);border-radius:4px;padding:12px 11px;min-height:120px;border-top:3px solid var(--stage-capture);}
+  .col:nth-of-type(2){border-top-color:var(--stage-scripted);}
+  .col:nth-of-type(3){border-top-color:var(--stage-dist);}
+  .col h2{font-family:var(--font-display);font-weight:600;font-size:14.5px;margin:2px 3px 12px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;}
+  .col h2 span.count{font-family:var(--font-mono);color:var(--ink-soft);font-weight:500;font-variant-numeric:tabular-nums;font-size:12px;}
+  .card{background:var(--paper);border-radius:5px;padding:11px 12px;margin-bottom:9px;cursor:pointer;border:1px solid var(--line);}
+  .card:hover{border-color:var(--accent);}
+  .card h3{margin:0 0 6px;font-family:var(--font-display);font-size:14.5px;font-weight:600;line-height:1.32;text-wrap:balance;}
+  .card .tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;}
+  .tag{font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:3px;color:#fff;letter-spacing:.01em;}
+  .card .meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .card .thumbrow{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
+  .card .thumbrow img{width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--line);}
+  .progress{height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;}
+  .progress > div{height:100%;background:var(--accent);}
+  .empty{color:var(--ink-soft);font-size:12px;padding:10px 6px;font-style:italic;}
+  .archive-toggle{padding:14px 26px;color:var(--ink-soft);font-size:13px;cursor:pointer;font-family:var(--font-mono);}
+  .archive{padding:0 26px 26px;}
+  .archive .card{opacity:.68;}
+  /* Must render above the sticky header (z-index:25) — otherwise the header
+     stays pinned on top of the modal's own top edge (title, and depending on
+     viewport height, the script box) instead of being covered by it like the
+     rest of the page. */
+  .overlay{position:fixed;inset:0;background:rgba(20,18,12,.5);display:none;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto;z-index:30;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border-radius:8px;max-width:640px;width:100%;padding:24px 26px 28px;margin-bottom:40px;border:1px solid var(--line);}
+  .modal h2{margin:0 0 16px;font-family:var(--font-display);font-weight:600;font-size:19px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+  .field input[type=text], .field input[type=password], .field textarea, .field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13.5px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .field textarea{min-height:90px;resize:vertical;}
+  .field .hint{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:5px;}
+  .row{display:flex;gap:10px;}
+  .row > div{flex:1;}
+  .small-btn{background:var(--accent-soft);border:none;color:var(--accent);border-radius:5px;padding:6px 10px;font-size:12px;font-family:var(--font-body);font-weight:500;cursor:pointer;white-space:nowrap;}
+  .small-btn:disabled{opacity:.5;cursor:default;}
+  .platform-row{border:1px solid var(--line);border-radius:7px;padding:10px 12px;margin-bottom:8px;}
+  .platform-row .ptop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .platform-row .pname{font-weight:600;font-size:13px;}
+  .platform-row select{width:auto;padding:5px 8px;font-size:12px;}
+  .platform-row textarea{min-height:52px;font-size:12.5px;}
+  .platform-row input[type=text]{font-size:12px;margin-top:6px;}
+  .charcount{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-align:right;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .charcount.over{color:var(--danger);font-weight:600;}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;}
+  .modal-actions .left{display:flex;gap:8px;flex-wrap:wrap;}
+  .banner{background:var(--gold-soft);color:var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;}
+  .banner.done{background:var(--accent-soft);color:var(--accent);}
+  .banner.bad{background:var(--danger-soft);color:var(--danger);}
+  .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);margin-top:4px;}
+  .stagepill{display:inline-block;font-family:var(--font-mono);font-size:11px;padding:3px 9px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-left:8px;vertical-align:middle;}
+  .imagegrid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+  .imagegrid .imgwrap{position:relative;width:84px;height:84px;}
+  .imagegrid img{width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--line);}
+  .imagegrid .imgwrap.uploading img{opacity:.4;}
+  .imagegrid .imgwrap.uploading::after{content:"…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);color:var(--ink-soft);}
+  .imagegrid .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;}
+  .script-toolbar{display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+  .script-editor{width:100%;min-height:340px;padding:11px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;line-height:1.55;font-family:var(--font-body);background:var(--paper);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .script-editor:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .script-editor p{margin:0 0 10px;}
+  .script-editor p:last-child{margin-bottom:0;}
+  .script-editor:empty:before{content:attr(data-placeholder);color:var(--ink-soft);pointer-events:none;}
+  .script-editor h1, .script-editor h2, .script-editor h3{font-family:var(--font-display);font-weight:700;line-height:1.25;margin:14px 0 8px;color:var(--ink);}
+  .script-editor h1:first-child, .script-editor h2:first-child, .script-editor h3:first-child{margin-top:0;}
+  .script-editor h1{font-size:1.55em;}
+  .script-editor h2{font-size:1.32em;}
+  .script-editor h3{font-size:1.14em;}
+  .inline-imgwrap{position:relative;margin:10px 0;}
+  /* Preset resize widths (right-click/long-press an image → Size). Centered
+     via auto margins whenever narrower than the full editor width; "full"
+     (no class) keeps the original 100%-width behavior. */
+  .inline-imgwrap.size-sm{width:35%;margin-left:auto;margin-right:auto;}
+  .inline-imgwrap.size-md{width:60%;margin-left:auto;margin-right:auto;}
+  .inline-imgwrap.size-lg{width:85%;margin-left:auto;margin-right:auto;}
+  /* Extra-specific selector (three classes) needed to outrank the generic
+     ".field input[type=text]" rule above, which would otherwise paint this
+     like an ordinary boxed field instead of plain Substack-style caption text.
+     The caption is a contenteditable div (not an <input>) so it can hold a
+     real inline <a class="scriptlink"> the same way script paragraphs can —
+     same Ctrl/Cmd+K / right-click / selection-toolbar hyperlink feature works
+     inside it. */
+  .script-editor .inline-imgwrap .imgcaption{display:block;width:100%;margin-top:6px;padding:2px 6px;border:none;border-bottom:1px solid transparent;background:transparent;color:var(--ink-soft);font-family:var(--font-body);font-style:italic;font-size:12.5px;line-height:1.4;text-align:center;-webkit-user-select:text;user-select:text;}
+  .script-editor .inline-imgwrap .imgcaption:focus{outline:none;border-bottom-color:var(--line);}
+  .script-editor .inline-imgwrap .imgcaption:empty:before{content:attr(data-placeholder);color:var(--ink-soft);opacity:.6;font-style:italic;pointer-events:none;}
+  /* Word-processor-style hyperlinks inside the script text (and, per above,
+     inside image captions too): select text, then Ctrl/Cmd+K, right-click,
+     or the floating selection toolbar that appears on any text selection. */
+  .script-editor a.scriptlink{color:var(--accent);text-decoration:underline;text-decoration-color:var(--accent-soft);}
+  .selection-toolbar{position:fixed;z-index:31;display:flex;gap:2px;background:var(--ink);border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.32);}
+  .selection-toolbar-btn{background:none;border:none;color:var(--paper);border-radius:5px;padding:6px 10px;font-size:14px;font-family:var(--font-body);cursor:pointer;white-space:nowrap;}
+  .selection-toolbar-btn:hover{background:rgba(255,255,255,.15);}
+  .selection-toolbar-btn.active{background:rgba(255,255,255,.28);}
+  .link-popover{position:fixed;z-index:32;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.32);padding:8px;display:flex;gap:6px;align-items:center;max-width:min(340px,92vw);}
+  .link-popover input[type=url]{flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;font-family:var(--font-body);background:var(--paper);color:var(--ink);}
+  .link-popover button{padding:7px 11px;}
+  /* user-select:none moved down here from the wrap div itself (see above) —
+     it needs to stay off the image/remove-button specifically (so a mobile
+     long-press doesn't trigger the native image-save callout or text
+     selection), but the wrap DIV around them must NOT carry it: Chrome
+     silently drops Ctrl+C/copy entirely once a selection's start or end
+     touches a user-select:none ancestor, which is exactly what was
+     happening whenever a text selection ran across/next to an inline image. */
+  .inline-image{max-width:100%;border-radius:6px;border:1px solid var(--line);display:block;pointer-events:none;-webkit-touch-callout:none;-webkit-user-drag:none;-webkit-user-select:none;user-select:none;}
+  .inline-imgwrap .rm{position:absolute;top:6px;right:6px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+  .img-longpress-menu{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;max-width:min(260px,90vw);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 7px;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:6;}
+  .img-longpress-menu button{min-width:36px;}
+  .img-longpress-menu .sizerow{display:flex;gap:4px;width:100%;justify-content:center;border-top:1px solid var(--line);padding-top:6px;margin-top:2px;}
+  .img-longpress-menu .sizerow button.active{background:var(--accent);color:var(--surface);}
+  /* Footnotes: a superscript reference in the running text, and its
+     definition rendered as its own row down in a "Footnotes" section at the
+     bottom of the script box — this mirrors exactly what Substack's own
+     native footnotes do (clickable superscript number, click jumps to a
+     bottom-of-post list, click the list entry to jump back), since that's
+     the ceiling of what Substack itself supports — no hover/pop-in there. */
+  .footnote-ref{cursor:pointer;color:var(--accent);font-weight:700;padding:0 1px;}
+  .footnote-ref:hover{text-decoration:underline;}
+  .footnote-divider{margin:16px 0 6px;padding-top:10px;border-top:1px solid var(--line);font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .footnote-def{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-soft);margin:6px 0;position:relative;padding-right:20px;}
+  .footnote-back{font-family:var(--font-mono);color:var(--accent);text-decoration:none;flex-shrink:0;cursor:pointer;}
+  .footnote-def-text{flex:1;outline:none;color:var(--ink);}
+  .footnote-def-text:focus{outline:none;border-bottom:1px solid var(--line);}
+  .footnote-def-text:empty:before{content:attr(data-placeholder);color:var(--ink-soft);opacity:.6;pointer-events:none;}
+  .footnote-def .rm{position:absolute;top:-2px;right:-4px;}
+  .footnote-flash{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+  .cropstage{position:relative;max-width:100%;margin:6px auto 14px;background:#000;touch-action:none;}
+  .cropstage img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;}
+  .croprect{position:absolute;border:2px solid var(--accent);box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move;touch-action:none;}
+  .crophandle{position:absolute;width:24px;height:24px;background:var(--accent);border-radius:50%;border:2px solid #fff;touch-action:none;}
+  .crophandle.nw{left:-12px;top:-12px;cursor:nwse-resize;}
+  .crophandle.ne{right:-12px;top:-12px;cursor:nesw-resize;}
+  .crophandle.sw{left:-12px;bottom:-12px;cursor:nesw-resize;}
+  .crophandle.se{right:-12px;bottom:-12px;cursor:nwse-resize;}
+  .orphan-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+  .orphan-row img{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0;}
+  .cover-image-preview{display:flex;gap:10px;align-items:center;margin-bottom:4px;}
+  .cover-image-preview img{width:100px;height:66px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex-shrink:0;}
+  .cover-image-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  /* Word count sits directly under the script box (not down in the general
+     toolbar row) specifically so it's visible without scrolling while
+     writing — that's the whole point of the feature. */
+  .wordcount-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;}
+  .wordcount-text{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .wordcount-text.status-ok{color:var(--accent);font-weight:600;}
+  .wordcount-text.status-low, .wordcount-text.status-high{color:var(--gold);font-weight:600;}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important;} }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <div class="titlerow">
+      <div>
+        <h1>Content Pipeline</h1>
+        <p>Capture &rarr; Scripted &amp; Filmed &rarr; Distributing &mdash; one board, no folders, tags for topics.</p>
+      </div>
+      <button class="ghost" id="settingsBtn">Settings</button>
+    </div>
+    <div class="syncline" id="syncline"><span class="dot" id="syncdot"></span><span id="syncmsg">Checking sync&hellip;</span></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="quickadd">
+      <input type="text" id="quickInput" placeholder="Plop an idea in&hellip; (title only, refine later)">
+      <button class="primary" id="quickAdd">Add</button>
+    </div>
+    <div class="searchbox"><input type="text" id="searchInput" placeholder="Search titles, scripts, tags, footnotes&hellip;"></div>
+    <input type="text" id="tagSearchInput" class="tag-search-input" placeholder="Filter tags&hellip;">
+    <div class="tagfilter" id="tagfilter"></div>
+    <div class="spacer"></div>
+    <button class="ghost" id="clearFilter">Clear filters</button>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="archive-toggle" id="archiveToggle">&#9656; Didn't pan out (0)</div>
+  <div class="archive" id="archive" style="display:none;"></div>
+
+  <div class="overlay" id="overlay-el">
+    <div class="modal" id="modal-el"></div>
+  </div>
+  <div class="overlay" id="cropOverlay-el" style="z-index:35;">
+    <div class="modal" id="cropModal-el" style="max-width:520px;"></div>
+  </div>
+</div>
+
+<script>
+const STAGES = [
+  {key:'capture', label:'Capture'},
+  {key:'scripted', label:'Scripted & Filmed'},
+  {key:'distributing', label:'Distributing'}
+];
+
+// Cards saved back when the board had a 'researching' stage need to land
+// somewhere now that the column is gone — migrated forward to 'scripted'
+// rather than back to 'capture', since reaching the researching stage meant
+// the idea had already moved past the raw-idea pile.
+function migrateLegacyStages(cards){
+  (cards||[]).forEach(c=>{
+    if(c.stage === 'researching') c.stage = 'scripted';
+    // 'queued_for_phone'/'publishing' were transient states for the two
+    // automated-publish approaches that didn't pan out (GitHub Actions hit
+    // Cloudflare, Tasker's WebView couldn't reliably drive Substack's UI) —
+    // any card still showing one of those is just stale, reset it.
+    const st = c.platforms && c.platforms.substack;
+    if(st && (st.status === 'queued_for_phone' || st.status === 'publishing' || st.status === 'publish_failed')){
+      st.status = 'not_started';
+    }
+    // The old combined "Instagram / Threads / FB" platform was split into a
+    // real 'instagram' posting button plus a manual 'threads_fb' entry.
+    // Existing cards keep their old caption text under 'instagram' as-is
+    // (same key, no data lost) — this just seeds the NEW 'threads_fb' key
+    // with a copy of that same text on first load, per Christopher's choice,
+    // and backfills any other platform key an older card predates.
+    if(c.platforms){
+      const hadThreadsFb = !!c.platforms.threads_fb;
+      PLATFORMS.forEach(p=>{
+        if(!c.platforms[p.key]){
+          c.platforms[p.key] = p.isSubstack
+            ? {status:'not_started', draft:'', link:''}
+            : {status:'not_started', caption:'', link:''};
+        }
+      });
+      if(!hadThreadsFb && c.platforms.instagram && c.platforms.instagram.caption){
+        c.platforms.threads_fb.caption = c.platforms.instagram.caption;
+      }
+      // Backfill the YouTube-specific title field onto cards saved before
+      // it existed -- leave it empty rather than pre-filling with the
+      // card's own title, so the UI's "using the card title" fallback note
+      // stays accurate until someone actually sets one.
+      if(c.platforms.youtube && c.platforms.youtube.title === undefined){
+        c.platforms.youtube.title = '';
+      }
+    }
+  });
+  return cards;
+}
+
+const PLATFORMS = [
+  {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
+  {key:'instagram',  label:'Instagram',               hashtags:true,  limit:2200, isInstagram:true},
+  {key:'threads_fb', label:'Threads / Facebook',      hashtags:true,  limit:null},
+  {key:'x',          label:'X',                       hashtags:false, limit:280},
+  {key:'youtube',    label:'YouTube',                 hashtags:true,  limit:null, isYouTube:true},
+  {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300, isBluesky:true},
+  {key:'substack',   label:'Substack',                hashtags:false, limit:null, isSubstack:true}
+];
+
+const TAG_PALETTE = ['#3d5a4c','#a9642f','#4a5a7a','#7a4a5a','#5a7a4a','#7a5a4a','#4a6a7a','#7a4a6a'];
+function tagColor(t){
+  let h=0; for(const c of t) h = (h*31 + c.charCodeAt(0)) % 997;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+
+// ============================================================
+// GitHub-backed persistence
+// Data lives at data/cards.json in the repo. Images live under
+// data/images/. Config (owner/repo/branch/token) is entered once
+// per device and kept only in that device's localStorage — never
+// baked into this file, so the public page carries no secret.
+// ============================================================
+
+const CONFIG_KEY = 'cp_github_config_v1';
+const LS_FALLBACK_KEY = 'cp_fallback_cards_v1';
+const DATA_PATH = 'data/cards.json';
+
+function loadConfig(){
+  try{ return JSON.parse(localStorage.getItem(CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveConfig(cfg){
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+let ghConfig = loadConfig();
+let cardsSha = null; // current known sha of data/cards.json, for conflict-safe writes
+
+// ---- Bluesky connection (App Password, entered once per device) ----
+// Same pattern as the GitHub token above: stored only in this browser's
+// localStorage, never baked into the file. Bluesky requires a per-app "App
+// Password" (bsky.app → Settings → Privacy and Security → App Passwords) —
+// never the account's real login password — because an app password can be
+// individually revoked and can't reset the account's real password or email.
+const BSKY_CONFIG_KEY = 'cp_bsky_config_v1';
+function loadBskyConfig(){
+  try{ return JSON.parse(localStorage.getItem(BSKY_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveBskyConfig(cfg){
+  localStorage.setItem(BSKY_CONFIG_KEY, JSON.stringify(cfg));
+}
+let bskyConfig = loadBskyConfig();
+
+// ---- YouTube connection (OAuth Client ID, entered once per device) ----
+// Unlike GitHub's token or Bluesky's app password, a Google OAuth "Client
+// ID" isn't a secret -- it's a public identifier baked into every Google
+// sign-in button on the web -- so storing it in localStorage is purely for
+// convenience (so it isn't re-typed every time), not for security. The
+// Client ID comes from Christopher's own Google Cloud project (see the
+// setup notes near ytGetAccessToken below); there's no way for this app to
+// create that project on his behalf, since it requires his own Google
+// account and the Cloud Console UI.
+const YT_CONFIG_KEY = 'cp_youtube_config_v1';
+function loadYtConfig(){
+  try{ return JSON.parse(localStorage.getItem(YT_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveYtConfig(cfg){
+  localStorage.setItem(YT_CONFIG_KEY, JSON.stringify(cfg));
+}
+let ytConfig = loadYtConfig();
+
+// ---- Instagram connection (Meta app credentials + OAuth token) ----
+// Unlike Bluesky's app password or YouTube's non-secret OAuth Client ID,
+// Instagram's flow needs a genuine app secret to exchange an authorization
+// code for a token. Meta's own guidance is to keep that exchange
+// server-side; Christopher chose to accept the same "stored only in this
+// browser's localStorage, never baked into the file" trust model already
+// used for the GitHub token and Bluesky app password above, rather than
+// stand up a backend just for this one call. Worth knowing either way:
+// Meta blocks the very FIRST code-for-token exchange from any browser JS
+// outright -- api.instagram.com/oauth/access_token returns no CORS headers
+// at all, confirmed by hand, not just documented as a "should be
+// server-side" recommendation -- so that one step can't be automated away
+// without a real server doing it, secret-storage choice aside. Every other
+// call in this flow (long-lived exchange, refresh, posting) DOES support
+// CORS and runs straight from the browser like Bluesky/YouTube. See
+// igCheckForOAuthRedirect/igCompleteConnect below for how that one
+// unavoidable step is handed to Christopher as a copy-paste command
+// instead, needed only when first connecting or fully reconnecting later.
+const IG_CONFIG_KEY = 'cp_instagram_config_v1';
+function loadIgConfig(){
+  try{ return JSON.parse(localStorage.getItem(IG_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveIgConfig(cfg){
+  localStorage.setItem(IG_CONFIG_KEY, JSON.stringify(cfg));
+}
+let igConfig = loadIgConfig();
+
+// ---- Instagram: OAuth connect flow ----
+// "Instagram API with Instagram Login" (Meta, live since July 2024) --
+// confirmed via Meta's own docs that this does NOT require linking a
+// Facebook Page, just Christopher's own Instagram professional (Business
+// or Creator) account added as a tester on his own Meta app. Two scopes:
+// instagram_business_basic (profile) and instagram_business_content_publish
+// (posting).
+const IG_OAUTH_SCOPE = 'instagram_business_basic,instagram_business_content_publish';
+const IG_STATE_KEY = 'cp_instagram_oauth_state';
+let pendingIgCode = null;
+
+function igRedirectUri(){
+  // Must exactly match a URI registered in the Meta app, including any
+  // trailing slash -- computed from the page's own current location rather
+  // than hardcoded, so it stays correct if the repo/Pages URL ever changes.
+  return location.origin + location.pathname;
+}
+
+function igStartAuthorize(){
+  if(!igConfig || !igConfig.clientId){
+    setSyncStatus('bad', 'Enter your Instagram App ID (and App Secret) in Settings first.');
+    return;
+  }
+  const state = Math.random().toString(36).slice(2);
+  sessionStorage.setItem(IG_STATE_KEY, state);
+  const url = 'https://api.instagram.com/oauth/authorize'
+    + '?client_id=' + encodeURIComponent(igConfig.clientId)
+    + '&redirect_uri=' + encodeURIComponent(igRedirectUri())
+    + '&scope=' + encodeURIComponent(IG_OAUTH_SCOPE)
+    + '&response_type=code'
+    + '&state=' + encodeURIComponent(state);
+  location.href = url; // navigate away and back -- Instagram's redirect must land on this exact page, so this can't be a popup
+}
+
+// The one step Meta won't let browser JS do directly (see the note above
+// loadIgConfig) -- handed to Christopher as a ready-made command instead.
+function igBuildCodeExchangeCommand(code){
+  return 'curl -s -X POST https://api.instagram.com/oauth/access_token \\\n'
+    + '  -F "client_id=' + igConfig.clientId + '" \\\n'
+    + '  -F "client_secret=' + igConfig.clientSecret + '" \\\n'
+    + '  -F "grant_type=authorization_code" \\\n'
+    + '  -F "redirect_uri=' + igRedirectUri() + '" \\\n'
+    + '  -F "code=' + code + '"';
+}
+
+// Finishes connecting once Christopher has run that command and pasted back
+// the short-lived access_token it printed: exchanges it for a long-lived
+// (~60 day) token and looks up the account's numeric id + username, both via
+// graph.instagram.com endpoints that DO support CORS.
+async function igCompleteConnect(shortLivedToken){
+  const res = await fetch('https://graph.instagram.com/access_token'
+    + '?grant_type=ig_exchange_token'
+    + '&client_secret=' + encodeURIComponent(igConfig.clientSecret)
+    + '&access_token=' + encodeURIComponent(shortLivedToken));
+  if(!res.ok){
+    const text = await res.text().catch(()=>'');
+    throw new Error('Instagram rejected the token exchange' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  const data = await res.json();
+  igConfig.accessToken = data.access_token;
+  igConfig.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+
+  const meRes = await fetch('https://graph.instagram.com/me?fields=user_id,username&access_token=' + encodeURIComponent(igConfig.accessToken));
+  if(meRes.ok){
+    const me = await meRes.json();
+    igConfig.userId = me.user_id;
+    igConfig.username = me.username;
+  }
+  saveIgConfig(igConfig);
+}
+
+// Best-effort silent refresh, tried once per page load. graph.instagram.com's
+// refresh endpoint supports CORS (unlike the initial code exchange above),
+// so normal use never needs the manual curl step again -- only a full
+// reconnect (access revoked, or the token fully expiring past its ~60 day
+// window without the app being opened) would.
+const IG_REFRESH_BEFORE_MS = 5 * 24 * 60 * 60 * 1000; // refresh with 5 days of runway left
+async function igMaybeRefreshToken(){
+  if(!igConfig || !igConfig.accessToken || !igConfig.tokenExpiresAt) return;
+  if(Date.now() < igConfig.tokenExpiresAt - IG_REFRESH_BEFORE_MS) return;
+  try{
+    const res = await fetch('https://graph.instagram.com/refresh_access_token'
+      + '?grant_type=ig_refresh_token'
+      + '&access_token=' + encodeURIComponent(igConfig.accessToken));
+    if(!res.ok) return; // best-effort -- a real problem will surface at the next post or Settings visit
+    const data = await res.json();
+    igConfig.accessToken = data.access_token;
+    igConfig.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+    saveIgConfig(igConfig);
+  }catch(err){ /* best-effort */ }
+}
+
+// Runs once at startup: if the page just got redirected back from Instagram's
+// consent screen, there'll be a ?code=...&state=... in the URL -- surface the
+// one manual step needed to finish connecting, then scrub the URL so a
+// refresh doesn't try to reuse an already-spent code.
+function igCheckForOAuthRedirect(){
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if(!code) return;
+  const expectedState = sessionStorage.getItem(IG_STATE_KEY);
+  history.replaceState(null, '', location.pathname); // scrub ?code=/&state= regardless of outcome below
+  if(!igConfig || !igConfig.clientId || !igConfig.clientSecret){
+    setSyncStatus('bad', "Instagram sent back a login code, but this browser doesn't have your Instagram App ID/Secret saved -- open Settings, enter them, and try Connect again.");
+    return;
+  }
+  if(expectedState && state !== expectedState){
+    setSyncStatus('bad', 'Instagram login did not come back with the expected state -- try Connect again.');
+    return;
+  }
+  pendingIgCode = code;
+  openSettings(false); // jump straight to the finish-connecting step
+}
+
+function ghHeaders(){
+  return {
+    'Authorization': 'Bearer ' + ghConfig.token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+function ghApiUrl(path){
+  return 'https://api.github.com/repos/' + ghConfig.owner + '/' + ghConfig.repo + '/contents/' + path;
+}
+function b64EncodeUnicode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64DecodeUnicode(str){
+  return decodeURIComponent(escape(atob(str)));
+}
+
+async function ghGetFile(path){
+  const res = await fetch(ghApiUrl(path) + '?ref=' + encodeURIComponent(ghConfig.branch), {headers: ghHeaders()});
+  if(res.status === 404) return null;
+  if(!res.ok) throw {code:'http_'+res.status, message: await res.text()};
+  return res.json();
+}
+async function ghPutFile(path, contentStr, message, sha){
+  const body = {message, content: b64EncodeUnicode(contentStr), branch: ghConfig.branch};
+  if(sha) body.sha = sha;
+  const res = await fetch(ghApiUrl(path), {method:'PUT', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify(body)});
+  if(!res.ok){
+    const text = await res.text();
+    let code = 'http_'+res.status;
+    if(res.status === 409 || res.status === 422) code = 'conflict';
+    if(res.status === 401 || res.status === 403) code = 'auth';
+    throw {code, message: text};
+  }
+  return res.json();
+}
+async function ghPutBinaryFile(path, base64Content, message){
+  const body = {message, content: base64Content, branch: ghConfig.branch};
+  const res = await fetch(ghApiUrl(path), {method:'PUT', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify(body)});
+  if(!res.ok){
+    const text = await res.text();
+    let code = 'http_'+res.status;
+    if(res.status === 401 || res.status === 403) code = 'auth';
+    throw {code, message: text};
+  }
+  return res.json();
+}
+async function ghDeleteFile(path, sha, message){
+  const res = await fetch(ghApiUrl(path), {method:'DELETE', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify({message, sha, branch: ghConfig.branch})});
+  return res.ok;
+}
+
+function setSyncStatus(mode, text){
+  const dot = document.getElementById('syncdot');
+  const msg = document.getElementById('syncmsg');
+  dot.className = 'dot' + (mode==='ok' ? ' ok' : mode==='bad' ? ' bad' : '');
+  msg.textContent = text;
+}
+
+function loadFallbackCards(){
+  try{
+    const raw = localStorage.getItem(LS_FALLBACK_KEY);
+    if(raw){ const p = JSON.parse(raw); if(Array.isArray(p)) return migrateLegacyStages(p); }
+  }catch(e){}
+  return [];
+}
+function saveFallbackCards(cards){
+  try{ localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(cards)); }catch(e){}
+}
+
+let state = { cards: loadFallbackCards() };
+let activeFilters = new Set();
+let searchQuery = '';
+let openCardId = null;
+let syncEnabled = false;
+// Instant local previews for images uploaded this session, keyed by GitHub
+// path. GitHub Pages can take 30-60s to actually start serving a file right
+// after it's committed, so pointing straight at the GitHub path immediately
+// after upload shows a broken image icon. A local blob URL sidesteps that —
+// it's this browser's own copy of the file, no network round-trip needed.
+let localImageBlobs = new Map();
+function imgSrc(path){ return localImageBlobs.has(path) ? localImageBlobs.get(path) : path; }
+
+// ---- undo (typing corrections) ----
+// Just a mobile-friendly trigger for the browser's own per-keystroke undo
+// history on whichever text field was last being typed in — title, tags,
+// script, captions, etc. Not an app-level "undo my last save/delete/image
+// edit" system: card adds/deletes are rare and easy enough to redo by hand,
+// so this only needs to catch ordinary typos while writing. Ctrl+Z/Cmd+Z
+// already does this natively with a keyboard; the button exists because
+// mobile has no Ctrl key. Lives at the bottom of the script area, right
+// where the typing happens.
+let lastFocusedEditable = null;
+// Chromium keeps a single undo stack shared by every editable region on the
+// page. Calling execCommand('undo') on a field that has no local history of
+// its own (never actually edited — just focused, or freshly populated by
+// populateScriptEditor/renderModal) falls back to that shared stack and can
+// silently revert an edit in a totally unrelated field elsewhere on the page
+// (e.g. the header's quick-add box), stealing focus there in the process —
+// exactly the opposite of "stay put so the user can keep typing". So track
+// which fields have actually received a real edit, and only ever fire
+// execCommand on one of those; otherwise just focus the target and stop.
+let editedFields = new WeakSet();
+document.addEventListener('input', (e)=>{
+  const t = e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && (t.classList.contains('imgcaption') || t.classList.contains('footnote-def-text'))))) editedFields.add(t);
+  if(t && t.id === 'scriptEditor') updateWordCountBar(t);
+});
+
+// ---- word count / speaking-pace target ----
+// Fixed pace estimate (no in-app calibration tool anymore — just a flat
+// assumption of how fast the user talks) used both to size the word target
+// for a fixed-length script and to translate the current word count into an
+// estimated spoken duration.
+// Calibrated from two real recorded videos: "Venezuela American Oil Deal"
+// (391 spoken words / 2:45 = ~142 wpm) and "Colorado River Allocation"
+// (571 spoken words / 3:33 = ~161 wpm) — pooled: 962 words / 6:18 = ~153 wpm.
+// If pace drifts over time, redo this the same way: take a few real
+// recorded runtimes, count the actual spoken words in that card's script
+// (skip image/caption lines, same as the live word count already does),
+// divide, and update this number.
+const WPM = 153;
+const TARGET_MINUTES = 3;
+
+function targetWordCount(){
+  return Math.round(WPM * TARGET_MINUTES);
+}
+// Counts only the words that will actually get spoken on camera: plain
+// script paragraphs, not image blocks — a caption under an image is a
+// Substack-style visual caption, not narration, so it shouldn't inflate the
+// count. Walking the live rendered DOM (rather than the serialized
+// markdown) means a hyperlink's visible label counts as its own words, not
+// the raw [label](url) syntax around it.
+function countScriptWords(editorEl){
+  let text = '';
+  editorEl.childNodes.forEach(node=>{
+    if(node.nodeType===1 && node.classList && (node.classList.contains('inline-imgwrap') || node.classList.contains('footnote-def') || node.classList.contains('footnote-divider'))) return;
+    text += (node.textContent || '') + ' ';
+  });
+  const m = text.match(/\S+/g);
+  return m ? m.length : 0;
+}
+function formatClock(ms){
+  const totalSec = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(totalSec/60), s = totalSec % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+function updateWordCountBar(editorEl){
+  const textEl = document.getElementById('wordcountText');
+  if(!textEl) return;
+  const count = countScriptWords(editorEl);
+  const target = targetWordCount();
+  // ±10% band around the target reads as "on pace" — nobody hits an exact
+  // word count while talking naturally, and a hard cutoff would nag over
+  // nothing.
+  const low = Math.round(target * 0.9);
+  const high = Math.round(target * 1.1);
+  let status = 'neutral';
+  if(count > 0) status = (count >= low && count <= high) ? 'ok' : (count < low ? 'low' : 'high');
+  textEl.className = 'wordcount-text status-' + status;
+  const estMs = (count / WPM) * 60000;
+  textEl.textContent = count + ' word' + (count===1 ? '' : 's') + '. Est ' + formatClock(estMs) + ' · target ~' + target + ' for ' + TARGET_MINUTES + ':00';
+}
+function triggerTypingUndo(){
+  const fallback = document.getElementById('scriptEditor');
+  const target = (lastFocusedEditable && document.body.contains(lastFocusedEditable)) ? lastFocusedEditable : fallback;
+  if(target && target.focus) target.focus();
+  if(target && editedFields.has(target)) document.execCommand('undo');
+}
+
+async function loadFromGitHub(){
+  setSyncStatus('', 'Connecting to GitHub…');
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      state.cards = migrateLegacyStages(Array.isArray(json.cards) ? json.cards : []);
+      cardsSha = file.sha;
+    } else {
+      // no data file yet - this is a brand new repo, start empty and create it on first save
+      state.cards = [];
+      cardsSha = null;
+    }
+    syncEnabled = true;
+    setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + ' — open this same page on any device to see the same board.');
+  }catch(err){
+    syncEnabled = false;
+    if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it.');
+    } else {
+      setSyncStatus('bad', "Can't reach GitHub right now — showing your last local copy. Changes will retry on next save.");
+    }
+  }
+  render();
+}
+
+async function saveToGitHub(){
+  saveFallbackCards(state.cards);
+  if(!syncEnabled || !ghConfig){ render(); return; }
+  setSyncStatus('', 'Saving…');
+  const payload = JSON.stringify({cards: state.cards}, null, 2);
+  try{
+    const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
+    cardsSha = result.content.sha;
+    setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + ' — open this same page on any device to see the same board.');
+  }catch(err){
+    if(err.code === 'conflict'){
+      // someone/something else saved first - refetch the latest and retry once
+      setSyncStatus('', 'Newer version found — merging…');
+      try{
+        const file = await ghGetFile(DATA_PATH);
+        cardsSha = file ? file.sha : null;
+        const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
+        cardsSha = result.content.sha;
+        setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + '.');
+      }catch(err2){
+        setSyncStatus('bad', "Couldn't save after a conflict — your change is kept locally, try again in a moment.");
+      }
+    } else if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it. Your change is kept locally.');
+    } else {
+      setSyncStatus('bad', "Couldn't reach GitHub — your change is kept locally and will sync on your next edit.");
+    }
+  }
+  render();
+}
+
+// Reconnecting (e.g. re-opening Settings and hitting Connect) must never
+// silently discard cards that only exist locally because an earlier save
+// failed to reach GitHub. Merge by id instead of blindly overwriting:
+// local wins on conflicts (it's the freshest edit on this device), any
+// card that only exists on GitHub is kept too, then the merged result is
+// written straight back so both sides agree.
+async function connectAndMerge(){
+  setSyncStatus('', 'Connecting to GitHub…');
+  const localCards = state.cards;
+  try{
+    const file = await ghGetFile(DATA_PATH);
+    let remoteCards = [];
+    if(file){
+      const json = JSON.parse(b64DecodeUnicode(file.content));
+      remoteCards = Array.isArray(json.cards) ? json.cards : [];
+      cardsSha = file.sha;
+    } else {
+      cardsSha = null;
+    }
+    const byId = new Map(remoteCards.map(c=>[c.id, c]));
+    localCards.forEach(c=>byId.set(c.id, c)); // local wins on id collision
+    state.cards = migrateLegacyStages([...byId.values()]);
+    syncEnabled = true;
+    await saveToGitHub(); // push the merged result so GitHub matches what's on screen
+  }catch(err){
+    // Couldn't even reach GitHub to merge — keep the local copy exactly as-is,
+    // don't touch state.cards, and let the next successful save reconcile it.
+    state.cards = localCards;
+    syncEnabled = false;
+    if(err.code === 'auth'){
+      setSyncStatus('bad', 'GitHub rejected this token — open Settings and check it. Nothing was lost, still showing your local copy.');
+    } else {
+      setSyncStatus('bad', "Can't reach GitHub right now — still showing your local copy, nothing was lost. Try Settings again once you have a connection.");
+    }
+    render();
+  }
+}
+
+async function initSync(){
+  if(!ghConfig || !ghConfig.owner || !ghConfig.repo || !ghConfig.token){
+    setSyncStatus('bad', 'Not connected yet — open Settings to link your GitHub repo.');
+    render();
+    openSettings(true);
+    return;
+  }
+  await loadFromGitHub();
+}
+
+// ---- settings (GitHub connection + Bluesky connection) ----
+
+function openSettings(forced){
+  const modal = document.getElementById('modal-el');
+  const cfg = ghConfig || {owner:'', repo:'', branch:'main', token:''};
+  const bcfg = bskyConfig || {handle:'', appPassword:''};
+  const ycfg = ytConfig || {clientId:''};
+  modal.innerHTML =
+    '<h2>Connect to GitHub</h2>' +
+    (forced ? '<div class="banner">This page stores your board in a GitHub repo you own. Enter its details once per device — nothing here is saved anywhere but this browser.</div>' : '') +
+    '<div class="field"><label>GitHub username</label><input type="text" id="cfgOwner" value="'+escapeHtml(cfg.owner)+'" placeholder="e.g. EconChrisClarke"></div>' +
+    '<div class="field"><label>Repository name</label><input type="text" id="cfgRepo" value="'+escapeHtml(cfg.repo)+'" placeholder="e.g. content-pipeline"></div>' +
+    '<div class="field"><label>Branch</label><input type="text" id="cfgBranch" value="'+escapeHtml(cfg.branch||'main')+'" placeholder="main"></div>' +
+    '<div class="field"><label>Personal access token</label><input type="password" id="cfgToken" value="'+escapeHtml(cfg.token)+'" placeholder="github_pat_...">' +
+      '<div class="hint">Fine-grained token, scoped to only this repo, with Contents: Read and write. Generated in GitHub → Settings → Developer settings → Personal access tokens. Stored only in this browser.</div></div>' +
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="cfgCancel">Cancel</button></div><button class="primary" id="cfgSave">Connect</button></div>' +
+    '<h2 style="margin-top:28px;">Connect to Bluesky</h2>' +
+    '<div class="banner">Used by the "Post to Bluesky" button in a card\'s Distribution section. Requires an <strong>App Password</strong> — not your real Bluesky password.</div>' +
+    '<div class="field"><label>Handle</label><input type="text" id="bskyHandle" value="'+escapeHtml(bcfg.handle)+'" placeholder="e.g. econchrisclarke.bsky.social"></div>' +
+    '<div class="field"><label>App password</label><input type="password" id="bskyAppPw" value="'+escapeHtml(bcfg.appPassword)+'" placeholder="xxxx-xxxx-xxxx-xxxx">' +
+      '<div class="hint">Create one at bsky.app → Settings → Privacy and Security → App Passwords. It can be revoked any time without changing your real password. Stored only in this browser, same as the GitHub token above.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="bskySave">Save Bluesky connection</button></div>' +
+    '<h2 style="margin-top:28px;">Connect to YouTube</h2>' +
+    '<div class="banner">Used by the "Post to YouTube" button. This one\'s a one-time setup in Google\'s own console — see the note below.</div>' +
+    '<div class="field"><label>OAuth Client ID</label><input type="text" id="ytClientId" value="'+escapeHtml(ycfg.clientId)+'" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">' +
+      '<div class="hint">Not a secret (safe to store plainly) — but it comes from a Google Cloud project only you can create: console.cloud.google.com → New project → enable "YouTube Data API v3" → OAuth consent screen (External, Testing, add yourself as a test user, scope <code>youtube.upload</code>) → Credentials → Create OAuth client ID → Web application → Authorized JavaScript origin: your GitHub Pages URL → copy the Client ID here. Each time you post, you\'ll get a normal Google sign-in popup — no password stored here.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="ytSave">Save YouTube connection</button></div>' +
+    igSettingsHtml() +
+    '';
+  document.getElementById('overlay-el').classList.add('open');
+  document.getElementById('cfgCancel').onclick = ()=>{ if(!forced) closeModal(); };
+  document.getElementById('cfgSave').onclick = async ()=>{
+    const owner = document.getElementById('cfgOwner').value.trim();
+    const repo = document.getElementById('cfgRepo').value.trim();
+    const branch = document.getElementById('cfgBranch').value.trim() || 'main';
+    const token = document.getElementById('cfgToken').value.trim();
+    if(!owner || !repo || !token){ return; }
+    ghConfig = {owner, repo, branch, token};
+    saveConfig(ghConfig);
+    closeModal();
+    await connectAndMerge();
+  };
+  document.getElementById('bskySave').onclick = ()=>{
+    const handle = document.getElementById('bskyHandle').value.trim().replace(/^@/,'');
+    const appPassword = document.getElementById('bskyAppPw').value.trim();
+    if(!handle || !appPassword) return;
+    bskyConfig = {handle, appPassword};
+    saveBskyConfig(bskyConfig);
+    setSyncStatus('ok', 'Bluesky connection saved for this device.');
+  };
+  document.getElementById('ytSave').onclick = ()=>{
+    const clientId = document.getElementById('ytClientId').value.trim();
+    if(!clientId) return;
+    ytConfig = {clientId};
+    saveYtConfig(ytConfig);
+    setSyncStatus('ok', 'YouTube connection saved for this device.');
+  };
+  wireIgSettingsHandlers();
+}
+
+// ---- Instagram settings UI ----
+// Rendered as its own chunk (rather than inline in openSettings' big
+// template string above) because it has more states than the other three
+// connections: no credentials yet, credentials saved but not authorized,
+// mid-way through the one manual step (see the note above loadIgConfig),
+// and fully connected.
+function igSettingsHtml(){
+  const icfg = igConfig || {clientId:'', clientSecret:''};
+  let html = '<h2 style="margin-top:28px;">Connect to Instagram</h2>' +
+    '<div class="banner">Used by the "Post to Instagram" button. Needs a free Meta developer app (no Facebook Page required) — see the hint below. Posts as a real Instagram Reel.</div>' +
+    '<div class="field"><label>Instagram App ID</label><input type="text" id="igClientId" value="'+escapeHtml(icfg.clientId||'')+'" placeholder="from developers.facebook.com"></div>' +
+    '<div class="field"><label>Instagram App Secret</label><input type="password" id="igClientSecret" value="'+escapeHtml(icfg.clientSecret||'')+'" placeholder="from developers.facebook.com">' +
+      '<div class="hint">One-time setup at developers.facebook.com: create an app → add the "Instagram" product → "API setup with Instagram login" → add your own Instagram account as an Instagram tester (accept the invite from inside the Instagram app itself, under Settings → Apps and Websites → Tester Invites) → copy the App ID and App Secret shown there into the two fields above. No Facebook Page needed for this login method. Meta blocks browsers from completing one specific step of the connection automatically (see below) — everything else, including day-to-day posting, runs straight from this page.</div></div>' +
+    '<div class="modal-actions"><div class="left"></div><button class="primary" id="igSaveCreds">Save Instagram app credentials</button></div>';
+
+  if(pendingIgCode){
+    html += '<div class="field"><label>Finish connecting</label>' +
+      '<div class="note">Instagram sent back a login code. Run this command once (paste it into a terminal, or a free tool like reqbin.com), then paste the <code>access_token</code> value it prints into the box below.</div>' +
+      '<textarea id="igCodeCmd" readonly style="margin-top:6px;min-height:110px;font-family:monospace;font-size:12px;">'+escapeHtml(igBuildCodeExchangeCommand(pendingIgCode))+'</textarea>' +
+      '<button class="small-btn" type="button" id="igCopyCmd" style="margin-top:6px;">📋 Copy command</button>' +
+    '</div>' +
+    '<div class="field"><label>Paste the access_token here</label><input type="text" id="igShortToken" placeholder="IGQ..."></div>' +
+    '<div class="modal-actions"><div class="left"><button class="ghost" id="igCancelPending">Cancel</button></div><button class="primary" id="igFinishConnect">Finish connecting</button></div>' +
+    '<div class="note" id="igConnectStatus" style="margin-top:6px;"></div>';
+  } else if(icfg.accessToken && icfg.username){
+    html += '<div class="banner done" style="margin-top:8px;">Connected as @'+escapeHtml(icfg.username)+'. Its token refreshes itself automatically — you shouldn\'t need to reconnect unless you revoke access on Instagram\'s side.</div>' +
+      '<div class="modal-actions"><div class="left"><button class="ghost" id="igDisconnect">Disconnect</button></div><button class="primary" id="igReauthorize">Re-authorize</button></div>';
+  } else {
+    html += '<div class="modal-actions"><div class="left"></div><button class="primary" id="igAuthorize">Authorize with Instagram</button></div>';
+  }
+  return html;
+}
+
+function wireIgSettingsHandlers(){
+  const saveCredsBtn = document.getElementById('igSaveCreds');
+  if(saveCredsBtn) saveCredsBtn.onclick = ()=>{
+    const clientId = document.getElementById('igClientId').value.trim();
+    const clientSecret = document.getElementById('igClientSecret').value.trim();
+    if(!clientId || !clientSecret) return;
+    igConfig = Object.assign({}, igConfig, {clientId, clientSecret});
+    saveIgConfig(igConfig);
+    setSyncStatus('ok', 'Instagram app credentials saved for this device.');
+  };
+  const authorizeBtn = document.getElementById('igAuthorize') || document.getElementById('igReauthorize');
+  if(authorizeBtn) authorizeBtn.onclick = ()=>{
+    const clientId = document.getElementById('igClientId').value.trim();
+    const clientSecret = document.getElementById('igClientSecret').value.trim();
+    if(!clientId || !clientSecret){ setSyncStatus('bad', 'Enter and save your Instagram App ID and App Secret first.'); return; }
+    igConfig = Object.assign({}, igConfig, {clientId, clientSecret});
+    saveIgConfig(igConfig);
+    igStartAuthorize();
+  };
+  const disconnectBtn = document.getElementById('igDisconnect');
+  if(disconnectBtn) disconnectBtn.onclick = ()=>{
+    igConfig = {clientId: igConfig.clientId, clientSecret: igConfig.clientSecret};
+    saveIgConfig(igConfig);
+    openSettings(false);
+    setSyncStatus('ok', 'Disconnected from Instagram (app credentials kept).');
+  };
+  const copyCmdBtn = document.getElementById('igCopyCmd');
+  if(copyCmdBtn) copyCmdBtn.onclick = async ()=>{
+    const ta = document.getElementById('igCodeCmd');
+    try{ await navigator.clipboard.writeText(ta.value); setSyncStatus('ok', 'Command copied.'); }
+    catch(err){ ta.select(); setSyncStatus('bad', "Couldn't copy automatically — select-all in the box and copy manually."); }
+  };
+  const cancelPendingBtn = document.getElementById('igCancelPending');
+  if(cancelPendingBtn) cancelPendingBtn.onclick = ()=>{ pendingIgCode = null; openSettings(false); };
+  const finishBtn = document.getElementById('igFinishConnect');
+  if(finishBtn) finishBtn.onclick = async ()=>{
+    const shortToken = document.getElementById('igShortToken').value.trim();
+    const statusEl = document.getElementById('igConnectStatus');
+    if(!shortToken){ if(statusEl) statusEl.textContent = 'Paste the access_token value first.'; return; }
+    if(statusEl) statusEl.textContent = 'Exchanging for a long-lived token…';
+    try{
+      await igCompleteConnect(shortToken);
+      pendingIgCode = null;
+      openSettings(false);
+      setSyncStatus('ok', 'Connected to Instagram as @' + igConfig.username + '.');
+    }catch(err){
+      if(statusEl) statusEl.textContent = (err && err.message) ? err.message : 'Something went wrong finishing the connection.';
+    }
+  };
+}
+document.getElementById('settingsBtn').onclick = ()=>openSettings(false);
+
+// ---- data model ----
+
+function newPlatformState(){
+  const o = {};
+  PLATFORMS.forEach(p=>{
+    o[p.key] = p.isSubstack
+      ? {status:'not_started', draft:'', link:''}
+      : {status:'not_started', caption:'', link:''};
+    // YouTube is the one platform with a real, separate "Title" field in
+    // its own API (distinct from the description/caption) -- unlike
+    // Instagram/TikTok, which only ever take a caption. Defaults to empty
+    // so the UI can fall back to the card's own title until someone
+    // overrides it specifically for YouTube.
+    if(p.isYouTube) o[p.key].title = '';
+  });
+  return o;
+}
+
+function makeCard(overrides){
+  return Object.assign({
+    id: 'c'+Math.random().toString(36).slice(2,9),
+    title: 'Untitled idea',
+    subtitle: '',
+    tags: [],
+    stage: 'capture',
+    dead: false,
+    script: '',
+    sources: [],
+    images: [],
+    coverImage: null,
+    baseCaption: '',
+    platforms: newPlatformState(),
+    createdAt: new Date().toISOString().slice(0,10)
+  }, overrides);
+}
+
+function allTags(){
+  const s = new Set();
+  state.cards.forEach(c=>c.tags.forEach(t=>s.add(t)));
+  return [...s].sort();
+}
+
+function distributionProgress(card){
+  const total = PLATFORMS.length;
+  const done = PLATFORMS.filter(p=>{
+    const st = card.platforms[p.key].status;
+    return p.isSubstack ? st==='published' : st==='posted';
+  }).length;
+  return {done, total};
+}
+
+function cardHaystack(c){
+  // c.script already carries footnote text inline (as "[^N]: ..." blocks),
+  // so footnote content — including old sources migrated into footnotes —
+  // is searchable for free without listing it separately here.
+  return [
+    c.title, c.script, c.baseCaption,
+    c.tags.join(' ')
+  ].join(' ').toLowerCase();
+}
+
+function cardMatchesFilter(c){
+  if(activeFilters.size && !c.tags.some(t=>activeFilters.has(t))) return false;
+  if(searchQuery && !cardHaystack(c).includes(searchQuery.toLowerCase())) return false;
+  return true;
+}
+
+// ---- rendering ----
+
+// A tag list grows without bound over the life of the board, so the chip row
+// can't just show every tag forever — it would eventually crowd out the
+// board itself. Two things keep it bounded: a small search box that narrows
+// the chips shown to a typed substring, and (when not searching) a cap at
+// TAG_LIMIT chips, most-used first, with a "+N more" toggle to see the rest.
+// An already-active filter chip is always kept visible even under a search,
+// so applying a filter can never make its own chip disappear.
+let tagFilterQuery = '';
+let tagFilterExpanded = false;
+const TAG_LIMIT = 12;
+
+function tagUseCounts(){
+  const counts = {};
+  state.cards.forEach(c=>c.tags.forEach(t=>{ counts[t] = (counts[t]||0) + 1; }));
+  return counts;
+}
+
+function renderTagFilter(){
+  const el = document.getElementById('tagfilter');
+  el.innerHTML = '';
+  const counts = tagUseCounts();
+  const q = tagFilterQuery.trim().toLowerCase();
+  let tags = allTags();
+  if(q) tags = tags.filter(t => t.toLowerCase().includes(q) || activeFilters.has(t));
+  tags.sort((a,b) => (counts[b]-counts[a]) || a.localeCompare(b));
+  const overflow = !tagFilterExpanded && !q && tags.length > TAG_LIMIT;
+  const shown = overflow ? tags.slice(0, TAG_LIMIT) : tags;
+
+  shown.forEach(t=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (activeFilters.has(t) ? ' active' : '');
+    chip.textContent = t;
+    chip.style.borderColor = activeFilters.has(t) ? tagColor(t) : '';
+    chip.style.background = activeFilters.has(t) ? tagColor(t) : '';
+    chip.onclick = ()=>{
+      activeFilters.has(t) ? activeFilters.delete(t) : activeFilters.add(t);
+      render();
+    };
+    el.appendChild(chip);
+  });
+
+  if(overflow){
+    const more = document.createElement('div');
+    more.className = 'chip chip-more';
+    more.textContent = '+' + (tags.length - TAG_LIMIT) + ' more';
+    more.onclick = ()=>{ tagFilterExpanded = true; render(); };
+    el.appendChild(more);
+  } else if(tagFilterExpanded && !q && tags.length > TAG_LIMIT){
+    const less = document.createElement('div');
+    less.className = 'chip chip-more';
+    less.textContent = 'Show fewer';
+    less.onclick = ()=>{ tagFilterExpanded = false; render(); };
+    el.appendChild(less);
+  }
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// The link field itself stays a plain, editable text input (so a link can be
+// pasted in manually or corrected) -- but a saved value with nothing to
+// click on it was confusing: clicking the text just puts your cursor in the
+// box, since it's a text input, not a hyperlink. When there IS a value, this
+// adds a small real <a target="_blank"> right next to the input so the
+// person can actually open it in one click, without changing how the input
+// itself behaves.
+// Fires a native browser notification when a post finishes (success or
+// failure) so the person doesn't have to keep the card's tab in view while
+// Instagram/YouTube take their sweet time processing a video. This only
+// works while the browser itself is open (even if a different tab is
+// active) -- it can't reach a phone after the browser/app is fully closed,
+// since that needs a push server this static, no-backend app doesn't have.
+// Permission is requested lazily, the first time a post actually finishes,
+// rather than nagging on page load; if the person denies it once, we don't
+// ask again this session (re-asking on every post would be annoying and
+// the browser would silently ignore it anyway once denied).
+function notifyPostResult(title, body){
+  if(!('Notification' in window)) return; // unsupported browser -- fail silent, the on-screen status message still shows
+  const fire = ()=>{ try{ new Notification(title, {body: body, icon: undefined}); }catch(e){ /* not fatal */ } };
+  if(Notification.permission === 'granted'){
+    fire();
+  } else if(Notification.permission !== 'denied'){
+    Notification.requestPermission().then(p=>{ if(p === 'granted') fire(); });
+  }
+}
+
+function linkFieldHtml(platKey, link, placeholder){
+  const openLink = link
+    ? ' <a href="'+escapeHtml(link)+'" target="_blank" rel="noopener" class="small-btn" style="text-decoration:none;white-space:nowrap;">Open ↗</a>'
+    : '';
+  return '<div style="display:flex;gap:6px;align-items:center;margin-top:0;">' +
+    '<input type="text" style="flex:1;" placeholder="'+escapeHtml(placeholder)+'" data-plat="'+platKey+'" data-field="link" value="'+escapeHtml(link)+'">' +
+    openLink +
+  '</div>';
+}
+
+function cardEl(c){
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.onclick = ()=>openModal(c.id);
+  const tagsHtml = c.tags.map(t=>'<span class="tag" style="background:'+tagColor(t)+'">'+escapeHtml(t)+'</span>').join('');
+  let extra = '';
+  if(c.stage==='distributing'){
+    const {done,total} = distributionProgress(c);
+    extra = '<div class="progress"><div style="width:'+((done/total)*100)+'%"></div></div><div class="meta" style="margin-top:4px;">'+done+'/'+total+' platforms</div>';
+  }
+  let thumbs = '';
+  if(c.images && c.images.length){
+    thumbs = '<div class="thumbrow">' + c.images.slice(0,4).map(img=>'<img src="'+escapeHtml(imgSrc(img.path))+'" loading="lazy">').join('') + '</div>';
+  }
+  div.innerHTML = '<h3>'+escapeHtml(c.title)+'</h3><div class="tags">'+tagsHtml+'</div><div class="meta">'+c.createdAt+'</div>'+thumbs+extra;
+  return div;
+}
+
+function render(){
+  renderTagFilter();
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  STAGES.forEach(stage=>{
+    const col = document.createElement('div');
+    col.className = 'col';
+    const cards = state.cards.filter(c=>!c.dead && c.stage===stage.key && cardMatchesFilter(c));
+    col.innerHTML = '<h2>'+stage.label+' <span class="count">'+cards.length+'</span></h2>';
+    if(cards.length===0){
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'Nothing here';
+      col.appendChild(e);
+    } else {
+      cards.forEach(c=>col.appendChild(cardEl(c)));
+    }
+    board.appendChild(col);
+  });
+
+  const dead = state.cards.filter(c=>c.dead && cardMatchesFilter(c));
+  document.getElementById('archiveToggle').textContent = '▸ Didn\'t pan out (' + dead.length + ')';
+  const archiveEl = document.getElementById('archive');
+  archiveEl.innerHTML = '';
+  dead.forEach(c=>archiveEl.appendChild(cardEl(c)));
+}
+
+document.getElementById('archiveToggle').onclick = ()=>{
+  const a = document.getElementById('archive');
+  a.style.display = a.style.display==='none' ? 'block' : 'none';
+};
+document.getElementById('clearFilter').onclick = ()=>{
+  activeFilters.clear(); searchQuery=''; tagFilterQuery=''; tagFilterExpanded=false;
+  document.getElementById('searchInput').value=''; document.getElementById('tagSearchInput').value='';
+  render();
+};
+document.getElementById('searchInput').addEventListener('input', e=>{ searchQuery = e.target.value; render(); });
+document.getElementById('tagSearchInput').addEventListener('input', e=>{ tagFilterQuery = e.target.value; tagFilterExpanded = false; render(); });
+
+document.getElementById('quickAdd').onclick = quickAdd;
+document.getElementById('quickInput').addEventListener('keydown', e=>{ if(e.key==='Enter') quickAdd(); });
+function quickAdd(){
+  const input = document.getElementById('quickInput');
+  const title = input.value.trim();
+  if(!title) return;
+  const c = makeCard({title});
+  state.cards.unshift(c);
+  input.value = '';
+  saveToGitHub();
+}
+
+// ---- modal / card detail ----
+
+function openModal(id){
+  openCardId = id;
+  const c = getCard();
+  if(c && migrateLegacySourcesToFootnotes(c)) saveToGitHub();
+  renderModal();
+  document.getElementById('overlay-el').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('overlay-el').classList.remove('open');
+  openCardId = null;
+  render();
+}
+function getCard(){ return state.cards.find(c=>c.id===openCardId); }
+
+function generateSubstackDraft(card){
+  // The script is already written as Substack-ready markdown — paragraphs
+  // with ![](path) image lines dropped in wherever they belong — so the
+  // draft just uses it as-is instead of re-chunking it into sentences,
+  // which would otherwise scramble the image placement.
+  let draft = '# ' + card.title + '\n\n';
+  if(card.subtitle) draft += '*' + card.subtitle + '*\n\n';
+  // Footnote definitions ("[^N]: ...") already ride along verbatim as the
+  // trailing block(s) of card.script, so they show up here for free. Note
+  // for whoever's pasting this into Substack: Substack does NOT turn pasted
+  // "[^N]" text into its own real interactive footnotes — that only happens
+  // through Substack's own footnote toolbar button. Use these numbered
+  // notes as the reference copy while re-adding each one by hand there.
+  draft += (card.script||'').trim() || '(No script text yet — write the script first, then regenerate.)';
+  return draft;
+}
+
+// ---- Substack: copy-formatted-paste workflow ----
+// Both fully-automated routes hit real walls: GitHub Actions' cloud IPs get
+// Cloudflare-challenged, and Tasker's embedded WebView can't reliably drive
+// Substack's own modern login/editor UI. This falls back to something that
+// always works because it's just you, in your own real browser: the app
+// puts genuinely-formatted content (real <b>/<h2>/<a>/<img> tags, not
+// markdown syntax) on the clipboard, Substack's own rich editor reads that
+// formatting straight off the paste, and you publish it yourself. Substack
+// status/link tracking reverts to the same manual dropdown + link field the
+// other platforms already use, since there's no automated callback anymore.
+const PUBLICATION_URL = 'https://econchrisclarke.substack.com/';
+const SUBSTACK_NEW_POST_URL = 'https://econchrisclarke.substack.com/publish/post?type=newsletter';
+
+// Renders a card's script into real HTML (not the markdown-ish stored
+// syntax) with public, stable image URLs — this is what actually gets put
+// on the clipboard, so it must never reference session-local blob: URLs
+// (those don't survive being pasted into a different tab/origin). Mirrors
+// populateScriptEditor's block-parsing, but building plain HTML rather than
+// the live editor's DOM (which prefers local blob previews via imgSrc()).
+function scriptToClipboardHtml(card){
+  const container = document.createElement('div');
+  const footnoteDefs = [];
+  const blocks = (card.script || '').split(/\n{2,}/);
+  const sizePct = {sm:'35%', md:'60%', lg:'85%'};
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(!trimmed) return;
+    if(isImageLine(trimmed)){
+      const path = imageLinePath(trimmed);
+      const caption = imageLineCaption(trimmed);
+      const size = imageLineSize(trimmed);
+      const wrap = document.createElement('div');
+      if(sizePct[size]){ wrap.style.width = sizePct[size]; wrap.style.margin = '0 auto'; }
+      const img = document.createElement('img');
+      img.src = 'https://raw.githubusercontent.com/'+ghConfig.owner+'/'+ghConfig.repo+'/'+ghConfig.branch+'/'+path;
+      img.style.maxWidth = '100%';
+      wrap.appendChild(img);
+      if(caption){
+        const capEl = document.createElement('div');
+        capEl.style.fontStyle = 'italic';
+        appendInlineMarkdown(capEl, caption);
+        wrap.appendChild(capEl);
+      }
+      container.appendChild(wrap);
+      return;
+    }
+    // Footnote definitions never appear inline as their own paragraph in the
+    // Substack copy — they're collected and rendered as a numbered "Notes"
+    // list at the very end instead, matching where Substack's own footnotes
+    // land. (Substack won't turn this pasted list into real interactive
+    // footnotes on its own — see the reminder note near the Substack draft
+    // button — but it gives a clean, correctly-ordered reference to
+    // re-add them from by hand.)
+    const fnDefMatch = FOOTNOTE_DEF_RE.exec(trimmed);
+    if(fnDefMatch){ footnoteDefs.push({num: +fnDefMatch[1], text: fnDefMatch[2]}); return; }
+    const headerMatch = HEADER_LINE_RE.exec(trimmed);
+    if(headerMatch){
+      const h = document.createElement('h'+headerMatch[1].length);
+      appendInlineMarkdown(h, headerMatch[2]);
+      container.appendChild(h);
+      return;
+    }
+    const p = document.createElement('p');
+    trimmed.split('\n').forEach((line, idx)=>{
+      if(idx>0) p.appendChild(document.createElement('br'));
+      appendInlineMarkdown(p, line);
+    });
+    container.appendChild(p);
+  });
+  if(footnoteDefs.length){
+    container.appendChild(document.createElement('hr'));
+    const label = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = 'Notes';
+    label.appendChild(strong);
+    container.appendChild(label);
+    const ol = document.createElement('ol');
+    footnoteDefs.sort((a,b)=>a.num-b.num).forEach(fd=>{
+      const li = document.createElement('li');
+      appendInlineMarkdown(li, fd.text);
+      ol.appendChild(li);
+    });
+    container.appendChild(ol);
+  }
+  return container;
+}
+
+async function copyRichTextToClipboard(container, label){
+  if(!navigator.clipboard || !window.ClipboardItem){
+    setSyncStatus('bad', "This browser doesn't support copying formatted content to the clipboard.");
+    return;
+  }
+  try{
+    const html = container.innerHTML;
+    const text = container.innerText || container.textContent || '';
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([html], {type:'text/html'}),
+        'text/plain': new Blob([text], {type:'text/plain'})
+      })
+    ]);
+    setSyncStatus('ok', label + ' copied — paste it into Substack.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy " + label.toLowerCase() + " — try again.");
+  }
+}
+
+async function copyPlainTextToClipboard(text, label){
+  try{
+    await navigator.clipboard.writeText(text);
+    setSyncStatus('ok', label + ' copied — paste it into Substack.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy " + label.toLowerCase() + " — try again.");
+  }
+}
+
+function copySubstackScript(card){
+  const container = scriptToClipboardHtml(card);
+  copyRichTextToClipboard(container, 'Script');
+}
+
+function trimToLimit(text, limit){
+  if(!limit || text.length<=limit) return text;
+  const cut = text.slice(0, limit-1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace>0 ? cut.slice(0,lastSpace) : cut) + '…';
+}
+function stripHashtags(text){
+  return text.replace(/\s?#\w+/g, '').replace(/\s{2,}/g,' ').trim();
+}
+function generateCaptionVariants(card){
+  const base = card.baseCaption || '';
+  PLATFORMS.forEach(p=>{
+    if(p.isSubstack) return;
+    let text = base;
+    if(!p.hashtags) text = stripHashtags(text);
+    text = trimToLimit(text, p.limit);
+    card.platforms[p.key].caption = text;
+  });
+}
+function addDays(d, n){
+  const r = new Date(d); r.setDate(r.getDate()+n);
+  return r.toISOString().slice(0,10);
+}
+
+// ---- Bluesky: direct posting (video + caption) ----
+// Unlike Substack (blocked behind Cloudflare for server-side automation),
+// Bluesky's AT Protocol API is meant to be called straight from a browser —
+// that's how bsky.app itself works — so a real "post it for me" button is
+// possible here, not just a copy-to-clipboard hand-off.
+//
+// Flow: com.atproto.server.createSession (handle + app password -> access
+// token + DID) -> com.atproto.repo.uploadBlob (raw video bytes -> blob ref)
+// -> com.atproto.repo.createRecord (app.bsky.feed.post, with the blob as an
+// app.bsky.embed.video). A fresh session is created every time rather than
+// caching the access token — simpler, and app-password sessions are cheap
+// to create.
+const BSKY_SERVICE = 'https://bsky.social';
+// As of this writing Bluesky's own video limits are 100MB and 3 minutes —
+// checked client-side before spending time uploading, but the server is the
+// real source of truth if these ever change.
+const BSKY_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+
+async function bskyCreateSession(){
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.server.createSession', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({identifier: bskyConfig.handle, password: bskyConfig.appPassword})
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    let msg = 'Bluesky rejected the login — check the handle and app password in Settings.';
+    if(res.status >= 500) msg = "Couldn't reach Bluesky right now — try again in a moment.";
+    throw new Error(msg + (text ? ' (' + text.slice(0,200) + ')' : ''));
+  }
+  return res.json(); // {accessJwt, did, handle, ...}
+}
+
+async function bskyUploadVideoBlob(accessJwt, file){
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.repo.uploadBlob', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessJwt,
+      'Content-Type': file.type || 'video/mp4'
+    },
+    body: file
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('Bluesky rejected the video upload' + (text ? ' (' + text.slice(0,200) + ')' : '') + '.');
+  }
+  const json = await res.json();
+  return json.blob; // blob ref to embed in the post
+}
+
+// Best-effort width/height for the video embed's aspectRatio — Bluesky's
+// video player uses it to size itself before the video has loaded. Not
+// fatal if this fails (some phone-recorded formats can be slow/unable to
+// report metadata in-browser); the post still goes through without it.
+function readVideoDimensions(file){
+  return new Promise((resolve)=>{
+    try{
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      const done = (dims)=>{ URL.revokeObjectURL(url); resolve(dims); };
+      v.preload = 'metadata';
+      v.onloadedmetadata = ()=> done(v.videoWidth && v.videoHeight ? {width:v.videoWidth, height:v.videoHeight} : null);
+      v.onerror = ()=> done(null);
+      v.src = url;
+    }catch(e){ resolve(null); }
+  });
+}
+
+async function bskyCreatePost(session, text, blobRef, aspectRatio){
+  const record = {
+    '$type': 'app.bsky.feed.post',
+    text: text || '',
+    createdAt: new Date().toISOString(),
+    embed: {
+      '$type': 'app.bsky.embed.video',
+      video: blobRef
+    }
+  };
+  if(aspectRatio) record.embed.aspectRatio = aspectRatio;
+  const res = await fetch(BSKY_SERVICE + '/xrpc/com.atproto.repo.createRecord', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + session.accessJwt,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({repo: session.did, collection: 'app.bsky.feed.post', record})
+  });
+  if(!res.ok){
+    const text2 = await res.text().catch(()=> '');
+    throw new Error('Bluesky rejected the post' + (text2 ? ' (' + text2.slice(0,200) + ')' : '') + '.');
+  }
+  return res.json(); // {uri, cid}
+}
+
+// Turns an at://did:.../app.bsky.feed.post/<rkey> URI into the public
+// bsky.app post URL, so the card's "link" field gets something you can
+// actually click and share instead of an opaque AT-URI.
+function bskyPostUrlFromAtUri(atUri, handle){
+  const m = /\/app\.bsky\.feed\.post\/([a-zA-Z0-9.]+)$/.exec(atUri || '');
+  if(!m) return '';
+  return 'https://bsky.app/profile/' + encodeURIComponent(handle) + '/post/' + m[1];
+}
+
+async function postVideoToBluesky(card, file, statusEl){
+  if(!bskyConfig || !bskyConfig.handle || !bskyConfig.appPassword){
+    setSyncStatus('bad', 'Connect Bluesky in Settings first (handle + app password).');
+    return;
+  }
+  if(file.size > BSKY_MAX_VIDEO_BYTES){
+    const mb = (file.size/1024/1024).toFixed(1);
+    if(statusEl) statusEl.textContent = 'That video is ' + mb + 'MB — Bluesky\'s limit is 100MB. Trim it and try again.';
+    setSyncStatus('bad', 'Video too large for Bluesky (100MB limit).');
+    return;
+  }
+  const caption = (card.platforms.bsky && card.platforms.bsky.caption) || '';
+  if(statusEl) statusEl.textContent = 'Signing in to Bluesky…';
+  setSyncStatus('', 'Posting to Bluesky…');
+  try{
+    const session = await bskyCreateSession();
+    if(statusEl) statusEl.textContent = 'Uploading video (this can take a bit on a slow connection)…';
+    const [blobRef, aspectRatio] = await Promise.all([
+      bskyUploadVideoBlob(session.accessJwt, file),
+      readVideoDimensions(file)
+    ]);
+    if(statusEl) statusEl.textContent = 'Publishing post…';
+    const result = await bskyCreatePost(session, caption, blobRef, aspectRatio);
+    const postUrl = bskyPostUrlFromAtUri(result.uri, session.handle || bskyConfig.handle);
+    card.platforms.bsky.status = 'posted';
+    card.platforms.bsky.link = postUrl || card.platforms.bsky.link;
+    setSyncStatus('ok', 'Posted to Bluesky.');
+    notifyPostResult('Posted to Bluesky', card.title + (postUrl ? '\n' + postUrl : ''));
+    // renderModal() rebuilds the whole platform-row markup from card data,
+    // which would wipe out a message set on the OLD statusEl -- so render
+    // first, then grab the freshly-created status element and message it.
+    renderModal();
+    const freshBskyStatusEl = document.getElementById('bskyPostStatus');
+    if(freshBskyStatusEl) freshBskyStatusEl.textContent = 'Posted! ' + (postUrl || '');
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to Bluesky.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+    notifyPostResult('Bluesky post failed', card.title + '\n' + msg);
+  }
+}
+
+// ---- YouTube: direct posting (video + auto-Shorts detection + thumbnail) ----
+// Same "call the real API straight from the browser" approach as Bluesky,
+// but the auth model is different: Google OAuth via Google Identity
+// Services (GIS) instead of a password. GIS's token client hands back a
+// short-lived access token (no refresh token, nothing persisted) after the
+// user clicks through a normal Google sign-in popup -- so there's no secret
+// to store here at all, unlike the GitHub token or Bluesky app password.
+// The one-time setup cost is a Google Cloud project (see the hint text in
+// the Settings modal above) that only Christopher can create, since it's
+// tied to his own Google account and API quota.
+//
+// Christopher's rule for Shorts vs. a regular upload: under 3 minutes ->
+// Shorts (auto-thumbnail from the video's first frame, #Shorts appended to
+// the description so YouTube's algorithm treats it as a Short); 3 minutes
+// or longer -> a regular video, and he supplies his own horizontal
+// thumbnail file, prompted for right after the video is picked.
+const YT_SHORTS_MAX_SECONDS = 180;
+const YT_CATEGORY_ID = '27'; // Education
+const YT_UPLOAD_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+
+let ytTokenClient = null;
+function ytGetAccessToken(){
+  return new Promise((resolve, reject)=>{
+    if(!ytConfig || !ytConfig.clientId){
+      reject(new Error('Connect YouTube in Settings first (OAuth Client ID).'));
+      return;
+    }
+    if(!window.google || !google.accounts || !google.accounts.oauth2){
+      reject(new Error("Google's sign-in script hasn't loaded yet -- check your connection and try again."));
+      return;
+    }
+    try{
+      // A fresh token client per call (cheap) rather than caching one keyed
+      // to a client ID that could change in Settings mid-session.
+      ytTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: ytConfig.clientId,
+        scope: YT_UPLOAD_SCOPE,
+        callback: (resp)=>{
+          if(resp && resp.access_token) resolve(resp.access_token);
+          else reject(new Error('Google sign-in did not return an access token.'));
+        },
+        error_callback: (err)=>{
+          reject(new Error('Google sign-in failed or was closed (' + (err && err.type || 'unknown') + ').'));
+        }
+      });
+      ytTokenClient.requestAccessToken();
+    }catch(err){
+      reject(new Error('Could not start Google sign-in: ' + (err && err.message || err)));
+    }
+  });
+}
+
+// Reads a video file's duration/dimensions without uploading it anywhere --
+// same throwaway-<video>-element trick as Bluesky's readVideoDimensions,
+// kept separate since this one also needs .duration for the Shorts cutoff.
+function readVideoMeta(file){
+  return new Promise((resolve, reject)=>{
+    try{
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.muted = true;
+      v.onloadedmetadata = ()=>{
+        resolve({duration: v.duration || 0, width: v.videoWidth || 0, height: v.videoHeight || 0, url, videoEl: v});
+      };
+      v.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error("Couldn't read that video file.")); };
+      v.src = url;
+    }catch(e){ reject(e); }
+  });
+}
+
+// Breaks text into lines that each fit within maxWidth at the given font
+// setting on the given 2D context -- a plain greedy word-wrap, not fancy,
+// but enough for a short thumbnail title.
+function wrapTextLines(ctx, text, maxWidth){
+  const words = (text||'').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach(word=>{
+    const test = line ? line + ' ' + word : word;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  return lines;
+}
+
+// Draws titleText as bold white text, with a dark outline and a dark
+// gradient band behind it for legibility over any footage, across the
+// bottom third of the canvas -- the "burned-in thumbnail title" look most
+// YouTube thumbnails use. Kept deliberately simple (no custom fonts, no
+// logo) rather than trying to match any particular visual style.
+function drawThumbnailTitle(canvas, titleText){
+  if(!titleText) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const bandHeight = Math.round(h * 0.34);
+  const bandY = h - bandHeight;
+  const grad = ctx.createLinearGradient(0, bandY, 0, h);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(0.35, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.75)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, bandY, w, bandHeight);
+
+  const maxTextWidth = w * 0.88;
+  let fontSize = Math.round(h * 0.09);
+  const minFontSize = Math.round(h * 0.045);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  let lines;
+  // Shrink the font until the (up to 3-line) title actually fits the band,
+  // rather than letting a long title overflow off the image.
+  do{
+    ctx.font = 'bold ' + fontSize + 'px -apple-system, Helvetica, Arial, sans-serif';
+    lines = wrapTextLines(ctx, titleText, maxTextWidth);
+    fontSize -= 2;
+  } while(lines.length > 3 && fontSize > minFontSize);
+
+  const lineHeight = fontSize + 14;
+  const totalHeight = lines.length * lineHeight;
+  let y = bandY + bandHeight/2 - totalHeight/2 + lineHeight/2;
+
+  lines.forEach(line=>{
+    ctx.lineWidth = Math.max(3, Math.round(fontSize*0.09));
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.strokeText(line, w/2, y);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(line, w/2, y);
+    y += lineHeight;
+  });
+}
+
+// Grabs the video's first frame as a JPEG blob, for the Shorts auto-
+// thumbnail, with the video's title burned in as overlay text (a "second
+// title" look, matching how most real YouTube thumbnails work) whenever a
+// title is provided. Seeking to exactly 0 sometimes yields a black/
+// undecoded frame in some browsers, so this nudges to a hair after 0 instead.
+function captureFirstFrame(videoEl, titleText){
+  return new Promise((resolve, reject)=>{
+    const grab = ()=>{
+      try{
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+        canvas.getContext('2d').drawImage(videoEl, 0, 0);
+        if(titleText) drawThumbnailTitle(canvas, titleText);
+        canvas.toBlob(blob=> blob ? resolve(blob) : reject(new Error('frame capture failed')), 'image/jpeg', 0.92);
+      }catch(err){ reject(err); }
+    };
+    videoEl.onseeked = grab;
+    try{ videoEl.currentTime = Math.min(0.05, (videoEl.duration||1)/2); }
+    catch(err){ reject(err); }
+  });
+}
+
+// Resumable upload, step 1: tell YouTube the metadata and get back a
+// session URL (in the Location header) to PUT the actual bytes to.
+async function ytStartResumableUpload(accessToken, file, metadata){
+  const res = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': file.type || 'video/mp4',
+      'X-Upload-Content-Length': String(file.size)
+    },
+    body: JSON.stringify(metadata)
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('YouTube rejected the upload request' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  const location = res.headers.get('Location');
+  if(!location) throw new Error("YouTube didn't return an upload URL.");
+  return location;
+}
+
+// Resumable upload, step 2: PUT the raw video bytes to that session URL.
+async function ytPutVideoBytes(uploadUrl, file){
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {'Content-Type': file.type || 'video/mp4'},
+    body: file
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('YouTube rejected the video upload' + (text ? ' (' + text.slice(0,300) + ')' : '') + '.');
+  }
+  return res.json(); // includes .id, the new video's id
+}
+
+async function ytSetThumbnail(accessToken, videoId, blob){
+  const res = await fetch('https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' + encodeURIComponent(videoId), {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Content-Type': blob.type || 'image/jpeg'
+    },
+    body: blob
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=> '');
+    throw new Error('Video uploaded, but setting the thumbnail failed' + (text ? ' (' + text.slice(0,200) + ')' : '') + '.');
+  }
+  return res.json();
+}
+
+function ytWatchUrl(videoId, isShort){
+  return isShort ? ('https://www.youtube.com/shorts/' + videoId) : ('https://www.youtube.com/watch?v=' + videoId);
+}
+
+// Orchestrates the whole thing. `thumbnailFile` is only passed in for a
+// long-form video (Christopher's own horizontal thumbnail, collected by
+// #ytThumbInput before this runs) -- for a Short, the thumbnail is captured
+// automatically from the video's own first frame instead.
+async function postVideoToYouTube(card, videoFile, thumbnailFile, statusEl){
+  if(!ytConfig || !ytConfig.clientId){
+    setSyncStatus('bad', 'Connect YouTube in Settings first (OAuth Client ID).');
+    return;
+  }
+  try{
+    if(statusEl) statusEl.textContent = 'Reading video…';
+    const meta = await readVideoMeta(videoFile);
+    const isShort = meta.duration > 0 && meta.duration < YT_SHORTS_MAX_SECONDS;
+
+    const ytTitle = (card.platforms.youtube && card.platforms.youtube.title) || card.title || 'Untitled';
+
+    let thumbnailBlob = null;
+    if(isShort){
+      try{ thumbnailBlob = await captureFirstFrame(meta.videoEl, ytTitle); }
+      catch(err){ /* not fatal -- YouTube will just pick its own default thumbnail */ }
+      URL.revokeObjectURL(meta.url);
+    } else {
+      URL.revokeObjectURL(meta.url);
+      thumbnailBlob = thumbnailFile || null;
+    }
+
+    let description = (card.platforms.youtube && card.platforms.youtube.caption) || '';
+    if(isShort && !/#shorts/i.test(description)) description = (description ? description + '\n\n' : '') + '#Shorts';
+
+    if(statusEl) statusEl.textContent = 'Waiting for Google sign-in…';
+    const accessToken = await ytGetAccessToken();
+
+    if(statusEl) statusEl.textContent = 'Starting upload…';
+    const uploadUrl = await ytStartResumableUpload(accessToken, videoFile, {
+      snippet: {
+        title: ytTitle,
+        description,
+        categoryId: YT_CATEGORY_ID
+      },
+      status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+    });
+
+    if(statusEl) statusEl.textContent = 'Uploading video (this can take a while on a slow connection)…';
+    const result = await ytPutVideoBytes(uploadUrl, videoFile);
+    const videoId = result.id;
+
+    let thumbWarning = '';
+    if(thumbnailBlob){
+      if(statusEl) statusEl.textContent = 'Setting thumbnail…';
+      try{ await ytSetThumbnail(accessToken, videoId, thumbnailBlob); }
+      catch(err){ thumbWarning = (err.message || 'Thumbnail failed.') + ' (video itself posted fine.) '; }
+    }
+
+    const watchUrl = ytWatchUrl(videoId, isShort);
+    card.platforms.youtube.status = 'posted';
+    card.platforms.youtube.link = watchUrl;
+    setSyncStatus('ok', 'Posted to YouTube.');
+    notifyPostResult('Posted to YouTube', card.title + '\n' + watchUrl);
+    // Same reasoning as the Bluesky flow above: renderModal() rebuilds the
+    // platform-row markup fresh from card data, wiping any message set on
+    // the OLD statusEl -- render first, then message the new element.
+    renderModal();
+    const freshYtStatusEl = document.getElementById('ytPostStatus');
+    if(freshYtStatusEl) freshYtStatusEl.textContent = thumbWarning + 'Posted' + (isShort ? ' as a Short! ' : '! ') + watchUrl;
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to YouTube.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+    notifyPostResult('YouTube post failed', card.title + '\n' + msg);
+  }
+}
+
+// ---- Instagram: direct posting (video + caption) ----
+// Meta's Graph API needs the video already hosted at a public URL -- unlike
+// Bluesky/YouTube, there's no direct byte-upload endpoint for this newer
+// "Instagram API with Instagram Login" flow, confirmed by hand against the
+// real endpoints (see the note above loadIgConfig). Since this app already
+// commits images straight into the GitHub repo (data/images/), the video
+// gets the same treatment: committed to data/videos/, then its
+// raw.githubusercontent.com URL is handed to Instagram as video_url for it
+// to fetch on its own. GitHub's Contents API caps a single file at 100MB,
+// so that's the practical size limit here -- well under Instagram's own
+// Reels limit, but a real constraint of this particular hosting trick.
+const IG_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const IG_POLL_INTERVAL_MS = 5000;
+const IG_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+function igRawVideoUrl(path){
+  return 'https://raw.githubusercontent.com/' + ghConfig.owner + '/' + ghConfig.repo + '/' + ghConfig.branch + '/' + path;
+}
+
+async function igCreateContainer(videoUrl, caption){
+  const form = new URLSearchParams();
+  form.set('media_type', 'REELS');
+  form.set('video_url', videoUrl);
+  form.set('caption', caption || '');
+  form.set('access_token', igConfig.accessToken);
+  const res = await fetch('https://graph.instagram.com/' + igConfig.userId + '/media', {method:'POST', body: form});
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok || !data.id){
+    throw new Error('Instagram rejected the post' + (data.error && data.error.message ? ' (' + data.error.message + ')' : '') + '.');
+  }
+  return data.id; // creation_id
+}
+
+// Instagram has to download the video from video_url and process it before
+// it can be published -- this can take anywhere from several seconds to a
+// couple of minutes depending on length, so poll status_code rather than
+// assuming it's ready right after container creation.
+async function igWaitForContainerReady(creationId){
+  const deadline = Date.now() + IG_POLL_TIMEOUT_MS;
+  while(Date.now() < deadline){
+    const res = await fetch('https://graph.instagram.com/' + creationId + '?fields=status_code,status&access_token=' + encodeURIComponent(igConfig.accessToken));
+    const data = await res.json().catch(()=>({}));
+    if(data.status_code === 'FINISHED') return;
+    if(data.status_code === 'ERROR') throw new Error('Instagram failed to process the video' + (data.status ? ' (' + data.status + ')' : '') + '.');
+    await new Promise(r=>setTimeout(r, IG_POLL_INTERVAL_MS));
+  }
+  throw new Error("Timed out waiting for Instagram to process the video -- it may still finish on its own; check your Instagram app in a few minutes before trying again.");
+}
+
+async function igPublishContainer(creationId){
+  const form = new URLSearchParams();
+  form.set('creation_id', creationId);
+  form.set('access_token', igConfig.accessToken);
+  const res = await fetch('https://graph.instagram.com/' + igConfig.userId + '/media_publish', {method:'POST', body: form});
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok || !data.id){
+    throw new Error('Instagram accepted the video but publishing failed' + (data.error && data.error.message ? ' (' + data.error.message + ')' : '') + '.');
+  }
+  return data.id; // published media id
+}
+
+async function igGetPermalink(mediaId){
+  try{
+    const res = await fetch('https://graph.instagram.com/' + mediaId + '?fields=permalink&access_token=' + encodeURIComponent(igConfig.accessToken));
+    const data = await res.json();
+    return data.permalink || '';
+  }catch(err){ return ''; }
+}
+
+async function postVideoToInstagram(card, file, statusEl){
+  if(!igConfig || !igConfig.accessToken || !igConfig.userId){
+    setSyncStatus('bad', 'Connect Instagram in Settings first.');
+    return;
+  }
+  if(!ghConfig || !ghConfig.owner || !ghConfig.repo){
+    setSyncStatus('bad', 'Connect GitHub in Settings first -- Instagram needs a public URL for the video, and this app hosts it in your repo to get one.');
+    return;
+  }
+  if(file.size > IG_MAX_VIDEO_BYTES){
+    if(statusEl) statusEl.textContent = "That video is over GitHub's 100MB upload limit. Instagram itself allows larger Reels, but this app hosts the video in your repo to give Instagram a public URL to fetch it from, and that step is capped at 100MB.";
+    return;
+  }
+  try{
+    await igMaybeRefreshToken();
+
+    if(statusEl) statusEl.textContent = 'Uploading video to your GitHub repo (used as a public URL for Instagram to fetch)…';
+    const base64 = await fileToBase64(file);
+    const ext = safeExt(file.name || 'video.mp4');
+    const path = 'data/videos/' + card.id + '-' + Date.now() + '.' + ext;
+    await ghPutBinaryFile(path, base64, 'Add video for Instagram post on card ' + card.id);
+    const videoUrl = igRawVideoUrl(path);
+
+    if(statusEl) statusEl.textContent = 'Creating Instagram post…';
+    const caption = (card.platforms.instagram && card.platforms.instagram.caption) || '';
+    const creationId = await igCreateContainer(videoUrl, caption);
+
+    if(statusEl) statusEl.textContent = 'Instagram is processing the video (this can take a minute or two)…';
+    await igWaitForContainerReady(creationId);
+
+    if(statusEl) statusEl.textContent = 'Publishing…';
+    const mediaId = await igPublishContainer(creationId);
+    const permalink = await igGetPermalink(mediaId);
+
+    card.platforms.instagram.status = 'posted';
+    card.platforms.instagram.link = permalink || ('https://www.instagram.com/p/' + mediaId);
+    setSyncStatus('ok', 'Posted to Instagram.');
+    notifyPostResult('Posted to Instagram', card.title + '\n' + card.platforms.instagram.link);
+    // Same reasoning as the Bluesky/YouTube flows above: renderModal()
+    // rebuilds the platform-row markup fresh from card data, wiping any
+    // message set on the OLD statusEl -- render first, then message the
+    // freshly-queried element.
+    renderModal();
+    const freshIgStatusEl = document.getElementById('igPostStatus');
+    if(freshIgStatusEl) freshIgStatusEl.textContent = 'Posted! ' + (permalink || card.platforms.instagram.link);
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to Instagram.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+    notifyPostResult('Instagram post failed', card.title + '\n' + msg);
+  }
+}
+
+// ---- image upload ----
+
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function safeExt(filename){
+  const m = /\.([a-zA-Z0-9]+)$/.exec(filename || '');
+  return (m ? m[1] : 'png').toLowerCase().replace(/[^a-z0-9]/g,'') || 'png';
+}
+
+// Images live inline in the script text as their own paragraph, tagged
+// with plain markdown: ![caption](data/images/xyz.png). That keeps ordering
+// and wording exactly as the writer intended, and means the script is
+// already Substack-ready — the draft generator just uses it verbatim.
+// Captions can themselves contain an inline [label](url) hyperlink (the same
+// Ctrl/Cmd+K feature the script text has), which means a caption can contain
+// its own "]" and "(" characters — so parseImageLine finds the outer
+// path boundary from the LAST "](" in the line rather than the first "]",
+// since the repo-relative path itself never contains that substring.
+// A trailing {sm}/{md}/{lg} marker right after the closing ")" carries the
+// preset display width chosen from the image's right-click/long-press menu;
+// no suffix (the common case) means full width, same as the original
+// behavior before resizing existed.
+const IMAGE_SIZE_RE = /\{(sm|md|lg)\}$/;
+function parseImageLine(line){
+  let t = line.trim();
+  if(!t.startsWith('![')) return null;
+  let size = 'full';
+  const sizeMatch = IMAGE_SIZE_RE.exec(t);
+  if(sizeMatch){ size = sizeMatch[1]; t = t.slice(0, -sizeMatch[0].length); }
+  if(!t.endsWith(')')) return null;
+  const cut = t.lastIndexOf('](');
+  if(cut === -1) return null;
+  const path = t.slice(cut + 2, -1);
+  if(!path) return null;
+  return { caption: t.slice(2, cut), path, size };
+}
+function scriptImageTag(path, caption, size){
+  const base = '![' + (caption || '').trim() + '](' + path + ')';
+  return (size && size !== 'full') ? base + '{' + size + '}' : base;
+}
+function isImageLine(line){ return !!parseImageLine(line); }
+function imageLinePath(line){ const p = parseImageLine(line); return p ? p.path : null; }
+function imageLineCaption(line){ const p = parseImageLine(line); return p ? p.caption : ''; }
+function imageLineSize(line){ const p = parseImageLine(line); return p ? p.size : 'full'; }
+function removeImageFromScript(script, path){
+  const esc = path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re = new RegExp('\\n*!\\[[\\s\\S]*?\\]\\('+esc+'\\)(?:\\{(?:sm|md|lg)\\})?\\n*','g');
+  return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function orphanedImages(card){
+  const text = card.script || '';
+  return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
+}
+
+// The script editor is a contenteditable div, not a textarea+preview pair —
+// images render as real <img> elements right inside the box you're typing
+// in. Every node it contains is built with createElement/createTextNode,
+// never innerHTML-from-a-string, so pasted or typed text (including things
+// like literal HTML tags) can never be interpreted as markup.
+
+let savedEditorRange = null; // last known caret position while the editor had focus, so "Insert image" still knows where to drop the image after the file picker steals focus
+document.addEventListener('selectionchange', ()=>{
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl){ savedEditorRange = null; return; }
+  const sel = document.getSelection();
+  if(sel && sel.rangeCount && editorEl.contains(sel.anchorNode)){
+    savedEditorRange = sel.getRangeAt(0).cloneRange();
+  }
+});
+
+// ---- word-processor-style hyperlinks in the script text (and captions) ----
+// Two "editable roots" carry this feature: the main #scriptEditor, and each
+// image's .imgcaption (a contenteditable div, not a plain <input>, precisely
+// so it can hold a real inline <a> the same way script paragraphs can).
+// Three ways in: Ctrl/Cmd+K with text selected jumps straight to the link
+// popover; right-clicking selected text, or the floating selection toolbar
+// that appears automatically a moment after any text selection settles,
+// offer a small menu (Copy/Cut/Paste/Search/Link) — the mobile equivalent of
+// a long-press menu, since mobile browsers generally don't hand a custom
+// "contextmenu" event to JS for a plain-text long-press the way desktop
+// right-click does, so a toolbar that shows up once a selection has settled
+// is the reliable cross-browser substitute for what long-pressing to select
+// naturally leads into.
+const LINK_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+function normalizeLinkUrl(raw){
+  const v = (raw || '').trim();
+  if(!v) return '';
+  if(v.startsWith('#') || LINK_SCHEME_RE.test(v)) return v;
+  return 'https://' + v;
+}
+function findLinkAncestor(node){
+  while(node && node.nodeType !== 9){
+    if(node.nodeType === 1 && node.tagName === 'A' && node.classList.contains('scriptlink')) return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+// Which editable region (if any) a node lives in for link/toolbar purposes:
+// the caption itself if it's inside one (even though the caption sits inside
+// a contentEditable="false" image island), #scriptEditor if it's plain
+// script text, or null for anything else in an image wrap (the "×" remove
+// button, the raw <img> — those keep the image's own long-press/crop menu).
+function findLinkEditableRoot(node){
+  let n = node;
+  while(n && n.nodeType !== 9){
+    if(n.nodeType === 1 && n.classList && n.classList.contains('imgcaption')) return n;
+    if(n.nodeType === 1 && n.classList && n.classList.contains('inline-imgwrap')) return null;
+    if(n.nodeType === 1 && n.id === 'scriptEditor') return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+
+let closeLinkPopoverHandler = null;
+function closeLinkPopover(){
+  const existing = document.querySelector('.link-popover');
+  if(existing) existing.remove();
+  if(closeLinkPopoverHandler){ document.removeEventListener('pointerdown', closeLinkPopoverHandler, true); closeLinkPopoverHandler = null; }
+}
+function positionFloatingEl(el, rect, above){
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
+  let top = above ? rect.top - h - 8 : rect.bottom + 6;
+  if(above && top < 4) top = rect.bottom + 8;
+  if(!above && top + h > window.innerHeight - 8) top = rect.top - h - 6;
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+function openLinkPopover(rect, opts){
+  closeLinkPopover();
+  closeSelectionToolbar();
+  const pop = document.createElement('div');
+  pop.className = 'link-popover';
+  pop.contentEditable = 'false';
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.placeholder = 'https://…';
+  input.value = opts.mode === 'edit' ? (opts.anchorEl.getAttribute('href') || '') : '';
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'primary';
+  applyBtn.textContent = opts.mode === 'edit' ? 'Update' : 'Add link';
+  pop.appendChild(input);
+  pop.appendChild(applyBtn);
+  if(opts.mode === 'edit'){
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'ghost';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = (e)=>{
+      e.preventDefault();
+      opts.anchorEl.replaceWith(document.createTextNode(opts.anchorEl.textContent));
+      closeLinkPopover();
+    };
+    pop.appendChild(removeBtn);
+  }
+  document.body.appendChild(pop);
+  positionFloatingEl(pop, rect, false);
+  const apply = ()=>{
+    const url = normalizeLinkUrl(input.value);
+    if(!url) return;
+    if(opts.mode === 'edit'){
+      opts.anchorEl.setAttribute('href', url);
+    } else {
+      const root = opts.editableRoot;
+      root.focus();
+      const sel = document.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(opts.range);
+      document.execCommand('createLink', false, url);
+      root.querySelectorAll('a:not(.scriptlink)').forEach(a=>{
+        a.classList.add('scriptlink');
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      });
+    }
+    closeLinkPopover();
+  };
+  applyBtn.onclick = (e)=>{ e.preventDefault(); apply(); };
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); apply(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); closeLinkPopover(); }
+  });
+  input.focus();
+  input.select();
+  closeLinkPopoverHandler = (e)=>{ if(!pop.contains(e.target)) closeLinkPopover(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
+}
+
+// ---- footnotes ----
+// Substack's own footnotes are a clickable superscript number in the text
+// that jumps down to a numbered entry at the bottom of the post (and back
+// up again) — no hover popup, no collapsible inline note, that's the whole
+// feature on their end. This mirrors that exactly rather than building
+// something fancier Substack can't actually reproduce: a footnote marker
+// [^N] inline in the script text, and its definition as a [^N]: ... block
+// always kept at the very end of the script, rendered as its own row under
+// a "Footnotes" divider. Numbering is always kept sequential 1..N (see
+// renumberFootnotes), same as Substack manages its own automatically.
+function buildFootnoteDefNode(num, text){
+  const row = document.createElement('div');
+  row.className = 'footnote-def';
+  row.dataset.fn = num;
+  const back = document.createElement('a');
+  back.href = '#';
+  back.className = 'footnote-back';
+  back.textContent = num + '.';
+  back.title = 'Jump back to this footnote’s marker in the text';
+  back.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteRef(row.dataset.fn); };
+  const body = document.createElement('div');
+  body.contentEditable = 'true';
+  body.className = 'footnote-def-text';
+  body.dataset.placeholder = 'Footnote text…';
+  if(text) appendInlineMarkdown(body, text);
+  body.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); body.blur(); } // single-line, like image captions
+  });
+  body.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/[\r\n]+/g, ' ');
+    document.execCommand('insertText', false, t);
+  });
+  body.addEventListener('input', ()=>{
+    if(!body.textContent.trim() && body.innerHTML) body.innerHTML = '';
+  });
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'rm';
+  rm.title = 'Remove this footnote';
+  rm.textContent = '×';
+  rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeFootnote(row.dataset.fn); };
+  row.appendChild(back);
+  row.appendChild(body);
+  row.appendChild(rm);
+  return row;
+}
+function flashEl(el){
+  el.classList.add('footnote-flash');
+  setTimeout(()=>el.classList.remove('footnote-flash'), 900);
+}
+function jumpToFootnoteDef(num){
+  const el = document.querySelector('.footnote-def[data-fn="'+num+'"]');
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); flashEl(el); }
+}
+function jumpToFootnoteRef(num){
+  const el = document.querySelector('.footnote-ref[data-fn="'+num+'"]');
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); flashEl(el); }
+}
+function nextFootnoteNumber(editorEl){
+  return editorEl.querySelectorAll('.footnote-def').length + 1;
+}
+function appendFootnoteDef(editorEl, num, text){
+  let divider = editorEl.querySelector('.footnote-divider');
+  if(!divider){
+    divider = document.createElement('div');
+    divider.className = 'footnote-divider';
+    divider.contentEditable = 'false';
+    divider.textContent = 'Footnotes';
+    editorEl.appendChild(divider);
+  }
+  editorEl.appendChild(buildFootnoteDefNode(String(num), text || ''));
+}
+function removeFootnote(num){
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl) return;
+  editorEl.querySelectorAll('.footnote-ref[data-fn="'+num+'"]').forEach(n=>n.remove());
+  const defRow = editorEl.querySelector('.footnote-def[data-fn="'+num+'"]');
+  if(defRow) defRow.remove();
+  if(!editorEl.querySelector('.footnote-def')){
+    const divider = editorEl.querySelector('.footnote-divider');
+    if(divider) divider.remove();
+  }
+  renumberFootnotes(editorEl);
+  const card = getCard();
+  if(card){ card.script = serializeScriptEditor(editorEl); saveToGitHub(); }
+}
+function renumberFootnotes(editorEl){
+  const defs = Array.from(editorEl.querySelectorAll('.footnote-def')).sort((a,b)=>(+a.dataset.fn)-(+b.dataset.fn));
+  defs.forEach((defRow, idx)=>{
+    const oldNum = defRow.dataset.fn, newNum = String(idx+1);
+    if(oldNum === newNum) return;
+    defRow.dataset.fn = newNum;
+    const back = defRow.querySelector('.footnote-back');
+    if(back) back.textContent = newNum + '.';
+    editorEl.querySelectorAll('.footnote-ref[data-fn="'+oldNum+'"]').forEach(ref=>{
+      ref.dataset.fn = newNum;
+      ref.textContent = newNum;
+    });
+  });
+}
+function insertFootnoteMarker(editorEl, range, num){
+  const sup = document.createElement('sup');
+  sup.className = 'footnote-ref';
+  sup.contentEditable = 'false';
+  sup.dataset.fn = String(num);
+  sup.textContent = String(num);
+  sup.title = 'Footnote ' + num + ' — click to jump to it';
+  sup.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteDef(sup.dataset.fn); };
+  const r = range.cloneRange();
+  r.collapse(false); // drop the marker right after the selection (or right at the cursor, if nothing was selected)
+  r.insertNode(sup);
+  const after = document.createRange();
+  after.setStartAfter(sup);
+  after.collapse(true);
+  const sel = document.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(after);
+}
+// Small popover, styled like the link popover, for typing the footnote's
+// text (which can itself contain a [label](url) link — handy since a lot of
+// these will be citations). Reuses closeLinkPopover/closeLinkPopoverHandler
+// since only one floating popover is ever open at a time.
+function openFootnotePopover(rect, range, editableRoot){
+  closeLinkPopover();
+  closeSelectionToolbar();
+  const pop = document.createElement('div');
+  pop.className = 'link-popover';
+  pop.contentEditable = 'false';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Footnote text…';
+  input.style.minWidth = '220px';
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'primary';
+  addBtn.textContent = 'Add footnote';
+  pop.appendChild(input);
+  pop.appendChild(addBtn);
+  document.body.appendChild(pop);
+  positionFloatingEl(pop, rect, false);
+  const apply = ()=>{
+    const text = input.value.trim();
+    if(!text) return;
+    editableRoot.focus();
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const num = nextFootnoteNumber(editableRoot);
+    insertFootnoteMarker(editableRoot, range, num);
+    appendFootnoteDef(editableRoot, num, text);
+    closeLinkPopover();
+    const card = getCard();
+    if(card){ card.script = serializeScriptEditor(editableRoot); saveToGitHub(); }
+  };
+  addBtn.onclick = (e)=>{ e.preventDefault(); apply(); };
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); apply(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); closeLinkPopover(); }
+  });
+  input.focus();
+  closeLinkPopoverHandler = (e)=>{ if(!pop.contains(e.target)) closeLinkPopover(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeLinkPopoverHandler, true), 0);
+}
+// Existing sources previously lived in their own "Sources / charts / papers"
+// list, disconnected from any specific spot in the script. That field is
+// gone now that footnotes exist (right-click → Footnote does the same job,
+// anchored to the actual text). Any sources a card already had are migrated
+// once, automatically, into footnotes appended at the end of its script —
+// nothing is silently dropped. Called from openModal, before renderModal.
+function migrateLegacySourcesToFootnotes(c){
+  if(!c.sources || !c.sources.length) return false;
+  let next = 1;
+  const existingNums = (c.script.match(/\[\^(\d+)\]:/g) || []).map(m=>parseInt(m.slice(2), 10));
+  if(existingNums.length) next = Math.max(...existingNums) + 1;
+  const blocks = c.sources.filter(s=>(s.label||s.url)).map(s=>{
+    const label = (s.label || s.url).trim();
+    const url = (s.url || '').trim();
+    const text = url ? ('[' + label + '](' + url + ')') : label;
+    const block = '[^' + next + ']: ' + text;
+    next++;
+    return block;
+  });
+  if(blocks.length) c.script = (c.script ? c.script.trim() + '\n\n' : '') + blocks.join('\n\n');
+  c.sources = [];
+  return blocks.length > 0;
+}
+
+function triggerLinkUI(range, editableRoot){
+  if(!range) return;
+  const startAnchor = findLinkAncestor(range.startContainer);
+  const endAnchor = findLinkAncestor(range.endContainer);
+  if(startAnchor && startAnchor === endAnchor){
+    openLinkPopover(startAnchor.getBoundingClientRect(), {mode:'edit', anchorEl: startAnchor});
+    return;
+  }
+  if(range.collapsed || !editableRoot) return; // nothing highlighted, and not sitting inside an existing link
+  openLinkPopover(range.getBoundingClientRect(), {mode:'create', range: range.cloneRange(), editableRoot});
+}
+
+// The floating selection toolbar offers the same everyday actions a native
+// long-press/right-click menu would (copy/cut/paste/search) alongside Link,
+// since our own popover replaces the native menu when it takes over the
+// gesture — leaving those out would be a step backward from what the
+// browser already gave people for free.
+let selectionToolbarEl = null;
+let selectionToolbarCloseHandler = null;
+let selectionToolbarShownForRange = null;
+function closeSelectionToolbar(){
+  if(selectionToolbarEl){ selectionToolbarEl.remove(); selectionToolbarEl = null; }
+  if(selectionToolbarCloseHandler){ document.removeEventListener('pointerdown', selectionToolbarCloseHandler, true); selectionToolbarCloseHandler = null; }
+  selectionToolbarShownForRange = null;
+}
+function rangesEqual(a, b){
+  return !!a && !!b && a.startContainer===b.startContainer && a.startOffset===b.startOffset && a.endContainer===b.endContainer && a.endOffset===b.endOffset;
+}
+function showSelectionToolbar(rect, range, editableRoot){
+  closeSelectionToolbar();
+  closeLinkPopover();
+  const savedRange = range.cloneRange();
+  const selectedText = savedRange.toString();
+  const restoreSelection = ()=>{
+    editableRoot.focus();
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  };
+  const bar = document.createElement('div');
+  bar.className = 'selection-toolbar';
+  bar.contentEditable = 'false';
+  const mk = (label, title, fn)=>{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'selection-toolbar-btn';
+    b.title = title;
+    b.textContent = label;
+    b.addEventListener('pointerdown', (e)=>e.preventDefault()); // don't let the tap collapse the selection first
+    b.addEventListener('click', (e)=>{ e.preventDefault(); fn(); });
+    return b;
+  };
+  const collapsed = savedRange.collapsed;
+  // With text actually highlighted: the full set — copy/cut, formatting,
+  // search, link. With just a cursor placed (right-click, nothing
+  // selected): none of those make sense, so only Paste plus (in the main
+  // script editor) paragraph style and "add footnote here" show up — this
+  // is what makes right-click double as the paragraph-style / footnote menu
+  // that used to be a separate control below the script box.
+  if(!collapsed){
+    bar.appendChild(mk('⧉', 'Copy', ()=>{ restoreSelection(); document.execCommand('copy'); closeSelectionToolbar(); }));
+    bar.appendChild(mk('✂', 'Cut', ()=>{ restoreSelection(); document.execCommand('cut'); closeSelectionToolbar(); }));
+  }
+  bar.appendChild(mk('📋', 'Paste', async ()=>{
+    restoreSelection();
+    try{
+      const text = await navigator.clipboard.readText();
+      document.execCommand('insertText', false, text);
+    }catch(err){
+      document.execCommand('paste'); // most browsers block this; readText above is the real path
+    }
+    closeSelectionToolbar();
+  }));
+  if(!collapsed){
+    const applyFormat = (cmd)=>{ restoreSelection(); document.execCommand(cmd); closeSelectionToolbar(); };
+    const boldBtn = mk('B', 'Bold', ()=>applyFormat('bold'));
+    boldBtn.style.fontWeight = '800';
+    const italicBtn = mk('I', 'Italic', ()=>applyFormat('italic'));
+    italicBtn.style.fontStyle = 'italic';
+    const underlineBtn = mk('U', 'Underline', ()=>applyFormat('underline'));
+    underlineBtn.style.textDecoration = 'underline';
+    // Reflect whether the current selection is already bold/italic/underlined —
+    // a quick glance tells you what you'd be toggling before you tap it.
+    try{ if(document.queryCommandState('bold')) boldBtn.classList.add('active'); }catch(e){}
+    try{ if(document.queryCommandState('italic')) italicBtn.classList.add('active'); }catch(e){}
+    try{ if(document.queryCommandState('underline')) underlineBtn.classList.add('active'); }catch(e){}
+    bar.appendChild(boldBtn);
+    bar.appendChild(italicBtn);
+    bar.appendChild(underlineBtn);
+    bar.appendChild(mk('🔍', 'Search the web', ()=>{
+      window.open('https://www.google.com/search?q=' + encodeURIComponent(selectedText), '_blank', 'noopener');
+      closeSelectionToolbar();
+    }));
+    bar.appendChild(mk('🔗', 'Link', ()=>{
+      closeSelectionToolbar();
+      triggerLinkUI(savedRange, editableRoot);
+    }));
+  }
+  if(editableRoot && editableRoot.id === 'scriptEditor'){
+    bar.appendChild(mk('📝', 'Add footnote', ()=>{
+      const r = savedRange.cloneRange();
+      const footnoteRect = r.getBoundingClientRect();
+      closeSelectionToolbar();
+      openFootnotePopover((footnoteRect && footnoteRect.width) ? footnoteRect : rect, r, editableRoot);
+    }));
+    // Paragraph style — Normal text / Heading 1-3 — replaces the dropdown
+    // that used to sit below the script box. Works whether or not anything
+    // is selected, since formatBlock only cares which block the caret/
+    // selection is in.
+    let curBlock = 'p';
+    try{ curBlock = (document.queryCommandValue('formatBlock') || 'p').toLowerCase(); }catch(err){}
+    [['p','Normal','Normal text'],['h1','H1','Heading 1'],['h2','H2','Heading 2'],['h3','H3','Heading 3']].forEach(([tag,label,title])=>{
+      const b = mk(label, title, ()=>{ restoreSelection(); document.execCommand('formatBlock', false, '<'+tag+'>'); closeSelectionToolbar(); });
+      if(curBlock === tag) b.classList.add('active');
+      bar.appendChild(b);
+    });
+  }
+  document.body.appendChild(bar);
+  positionFloatingEl(bar, rect, true);
+  selectionToolbarEl = bar;
+  selectionToolbarShownForRange = savedRange;
+  selectionToolbarCloseHandler = (e)=>{ if(!bar.contains(e.target)) closeSelectionToolbar(); };
+  setTimeout(()=>document.addEventListener('pointerdown', selectionToolbarCloseHandler, true), 0);
+}
+
+document.addEventListener('keydown', (e)=>{
+  if((e.key !== 'k' && e.key !== 'K') || !(e.ctrlKey || e.metaKey)) return;
+  const sel = document.getSelection();
+  if(!sel || !sel.rangeCount) return;
+  const root = findLinkEditableRoot(sel.anchorNode);
+  if(!root) return;
+  e.preventDefault();
+  triggerLinkUI(sel.getRangeAt(0).cloneRange(), root);
+});
+
+// Native Ctrl+C sometimes copied nothing when the selection ran across or
+// right up against an inline image: Chrome silently no-ops the copy command
+// once the selection's start/end touches a user-select:none ancestor (fixed
+// on the CSS side too, see .inline-imgwrap above), and the various
+// contenteditable islands in this editor (image captions, footnote text)
+// made that easy to hit by accident. This is a belt-and-suspenders backstop
+// that always puts the plain-text selection on the clipboard directly,
+// regardless of what DOM quirks might otherwise block the browser's default
+// behavior — scoped to just this editor's contenteditable regions so it
+// never interferes with copying out of ordinary inputs/textareas (whose
+// native selection isn't visible to document.getSelection() anyway).
+document.addEventListener('copy', (e)=>{
+  const sel = document.getSelection();
+  if(!sel || sel.isCollapsed || !sel.rangeCount) return;
+  const root = findLinkEditableRoot(sel.anchorNode) || findLinkEditableRoot(sel.focusNode);
+  if(!root) return;
+  const text = sel.getRangeAt(0).toString();
+  if(!text || !e.clipboardData) return;
+  e.clipboardData.setData('text/plain', text);
+  e.preventDefault();
+});
+
+document.addEventListener('contextmenu', (e)=>{
+  const root = findLinkEditableRoot(e.target);
+  if(!root) return;
+  const sel = document.getSelection();
+  if(!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const inLink = findLinkAncestor(range.startContainer);
+  const isScriptRoot = root.id === 'scriptEditor';
+  // A collapsed selection (just a placed cursor, nothing highlighted) still
+  // has something to offer in the main script editor — paragraph style and
+  // "add footnote at cursor" don't need any text selected — so only bail
+  // out early for a caption with nothing selected and no link under it.
+  if(range.collapsed && !inLink && !isScriptRoot) return; // nothing to act on — let the normal menu show
+  e.preventDefault();
+  if(inLink){ triggerLinkUI(range.cloneRange(), root); return; }
+  let rect = range.getBoundingClientRect();
+  if(!rect || (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0)){
+    rect = {left:e.clientX, right:e.clientX, top:e.clientY, bottom:e.clientY, width:0, height:0};
+  }
+  showSelectionToolbar(rect, range, root);
+});
+
+// The toolbar deliberately waits for the selection to stop changing before
+// it appears — on mobile, dragging the native selection handles fires
+// selectionchange continuously while the highlighted range is still
+// growing/shrinking, and popping the toolbar up on every intermediate word
+// would make it jump around under the user's thumb. Debouncing means it
+// only shows once the highlighted area has actually settled.
+//
+// Two extra guards keep this from fighting with the other two entry points:
+// a link popover already open owns the selection (Ctrl/Cmd+K and the
+// "edit existing link" path both jump straight there, bypassing the
+// toolbar) so a lingering selectionchange from the gesture that led there
+// shouldn't schedule a toolbar underneath it; and a selectionchange that
+// reports the exact same range a right-click just opened the toolbar for
+// (a queued event racing a few milliseconds behind the synchronous
+// contextmenu handler) shouldn't flash it closed and reopen it a moment
+// later — only an actually different selection should restart the debounce.
+let selectionToolbarDebounce = null;
+document.addEventListener('selectionchange', ()=>{
+  if(document.querySelector('.link-popover')) return;
+  const sel = document.getSelection();
+  const range = (sel && sel.rangeCount && !sel.isCollapsed) ? sel.getRangeAt(0) : null;
+  const root = range ? findLinkEditableRoot(range.commonAncestorContainer) : null;
+  if(!root){
+    if(selectionToolbarDebounce){ clearTimeout(selectionToolbarDebounce); selectionToolbarDebounce = null; }
+    closeSelectionToolbar();
+    return;
+  }
+  if(selectionToolbarEl && rangesEqual(range, selectionToolbarShownForRange)) return;
+  if(selectionToolbarDebounce) clearTimeout(selectionToolbarDebounce);
+  closeSelectionToolbar(); // don't leave a stale one showing at the old position while the selection is still moving
+  selectionToolbarDebounce = setTimeout(()=>{
+    selectionToolbarDebounce = null;
+    if(document.querySelector('.link-popover')) return;
+    const sel2 = document.getSelection();
+    if(!sel2 || !sel2.rangeCount || sel2.isCollapsed) return;
+    const range2 = sel2.getRangeAt(0);
+    const root2 = findLinkEditableRoot(range2.commonAncestorContainer);
+    if(!root2) return;
+    const rect = range2.getBoundingClientRect();
+    if(!rect || (rect.width === 0 && rect.height === 0)) return;
+    showSelectionToolbar(rect, range2, root2);
+  }, 300);
+});
+
+function buildImageNode(card, path, caption, size){
+  const wrap = document.createElement('div');
+  wrap.className = 'inline-imgwrap';
+  wrap.contentEditable = 'false'; // an atomic, non-editable island inside the editable editor
+  wrap.dataset.path = path;
+  wrap.dataset.size = size && size !== 'full' ? size : 'full';
+  if(wrap.dataset.size !== 'full') wrap.classList.add('size-' + wrap.dataset.size);
+  const img = document.createElement('img');
+  img.className = 'inline-image';
+  img.loading = 'lazy';
+  img.src = imgSrc(path);
+  // A Substack-style caption right under the image — plain italic text,
+  // centered, no border until focused. It's a small contenteditable div (not
+  // a plain <input>), so — despite living inside this contentEditable="false"
+  // image island — it can hold real mixed text + <a class="scriptlink">
+  // content: the same Ctrl/Cmd+K / right-click / selection-toolbar hyperlink
+  // feature the main script text has works here too. Stored as the image's
+  // markdown alt text so it survives in card.script and rides along verbatim
+  // into the Substack draft; a caption's own inline link is stored the same
+  // way script-text links are, as [label](url) inside that alt text.
+  const cap = document.createElement('div');
+  cap.contentEditable = 'true';
+  cap.className = 'imgcaption';
+  cap.dataset.placeholder = 'Add a caption…';
+  if(caption) appendInlineMarkdown(cap, caption);
+  cap.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); cap.blur(); } // single-line: Enter confirms instead of adding a line break
+  });
+  cap.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/[\r\n]+/g, ' ');
+    document.execCommand('insertText', false, text);
+  });
+  cap.addEventListener('input', ()=>{
+    // Chrome/Safari leave a stray <br> behind after deleting all text in a
+    // contenteditable, which would otherwise keep the :empty placeholder from
+    // reappearing.
+    if(!cap.textContent.trim() && cap.innerHTML) cap.innerHTML = '';
+  });
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'rm';
+  rm.title = 'Remove';
+  rm.textContent = '×';
+  rm.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); removeInlineImageNode(card, wrap, path); };
+  wrap.appendChild(img);
+  wrap.appendChild(cap);
+  wrap.appendChild(rm);
+  attachLongPress(wrap, card, path);
+  return wrap;
+}
+
+// Long-press on an inline image (touch-hold, ~500ms with no significant
+// finger movement) opens a small menu: reorder up/down, or crop. On desktop,
+// the same menu opens with a right-click instead — the pointer-based long
+// press is scoped to touch/pen input so a mouse never has to sit and hold.
+// A quick tap still just goes through to the "×" remove button as before.
+function attachLongPress(wrap, card, path){
+  let timer = null, startX = 0, startY = 0;
+  const cancel = ()=>{ if(timer){ clearTimeout(timer); timer = null; } };
+  wrap.addEventListener('pointerdown', (e)=>{
+    if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return; // desktop uses right-click instead
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
+    startX = e.clientX; startY = e.clientY;
+    cancel();
+    // Read wrap.dataset.path live rather than closing over the initial `path`:
+    // after a crop, applyCroppedImage swaps the wrapper onto a new path in
+    // place (same DOM node), so a stale closure here would keep pointing
+    // crop/menu actions at the original, now-deleted image path forever.
+    timer = setTimeout(()=>{ timer = null; showImageMenu(wrap, card, wrap.dataset.path); }, 500);
+  });
+  wrap.addEventListener('pointermove', (e)=>{
+    if(timer && (Math.abs(e.clientX-startX)>10 || Math.abs(e.clientY-startY)>10)) cancel();
+  });
+  wrap.addEventListener('pointerup', cancel);
+  wrap.addEventListener('pointercancel', cancel);
+  wrap.addEventListener('contextmenu', (e)=>{
+    if(e.target.closest && e.target.closest('.rm, .imgcaption')) return;
+    e.preventDefault();
+    e.stopPropagation(); // don't also trigger the editor-wide link-on-selection contextmenu handler below
+    showImageMenu(wrap, card, wrap.dataset.path);
+  });
+}
+
+let closeImageMenuHandler = null;
+function closeImageMenu(){
+  const existing = document.querySelector('.img-longpress-menu');
+  if(existing) existing.remove();
+  if(closeImageMenuHandler){ document.removeEventListener('pointerdown', closeImageMenuHandler, true); closeImageMenuHandler = null; }
+}
+// Copies an inline image to the system clipboard as a real image (not a
+// link or a file), so images kept in a card can be pasted straight into any
+// other app — Notes, Slack, an email, a slide. Always re-encodes to PNG via
+// a canvas rather than copying the original bytes verbatim: the Clipboard
+// API's image support is only broadly guaranteed for image/png across
+// browsers, so a JPEG/GIF/WebP source needs converting to paste reliably
+// everywhere. Images on this page are always same-origin (served relative
+// to the Pages site) or session-local blob: URLs, so drawing them to canvas
+// never taints it.
+async function copyImageToClipboard(path){
+  if(!navigator.clipboard || !window.ClipboardItem){
+    setSyncStatus('bad', "This browser doesn't support copying images to the clipboard.");
+    return;
+  }
+  try{
+    const img = new Image();
+    await new Promise((resolve, reject)=>{
+      img.onload = resolve;
+      img.onerror = ()=>reject(new Error('image load failed'));
+      img.src = imgSrc(path);
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    const blob = await new Promise(resolve=>canvas.toBlob(resolve, 'image/png'));
+    if(!blob) throw new Error('canvas export failed');
+    await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+    setSyncStatus('ok', 'Image copied — paste it anywhere.');
+  }catch(err){
+    setSyncStatus('bad', "Couldn't copy the image — try again, or use your browser's own \"Copy image\" option on it.");
+  }
+}
+
+function showImageMenu(wrap, card, path){
+  closeImageMenu();
+  const menu = document.createElement('div');
+  menu.className = 'img-longpress-menu';
+  menu.contentEditable = 'false';
+  const mkBtn = (label, title, fn)=>{
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'small-btn'; b.title = title; b.textContent = label;
+    b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); closeImageMenu(); fn(); };
+    return b;
+  };
+  menu.appendChild(mkBtn('⧉ Copy', 'Copy image to clipboard', ()=>copyImageToClipboard(path)));
+  menu.appendChild(mkBtn('↑', 'Move up', ()=>moveImageBlock(card, wrap, -1)));
+  menu.appendChild(mkBtn('↓', 'Move down', ()=>moveImageBlock(card, wrap, 1)));
+  menu.appendChild(mkBtn('✂ Crop', 'Crop image', ()=>openCropper(card, path, wrap)));
+  const sizeRow = document.createElement('div');
+  sizeRow.className = 'sizerow';
+  const currentSize = wrap.dataset.size || 'full';
+  [['sm','S'],['md','M'],['lg','L'],['full','Full']].forEach(([key,label])=>{
+    const b = mkBtn(label, (key==='full'?'Full width':key.toUpperCase()+' width'), ()=>setImageSize(card, wrap, key));
+    if(key === currentSize) b.classList.add('active');
+    sizeRow.appendChild(b);
+  });
+  menu.appendChild(sizeRow);
+  wrap.appendChild(menu);
+  closeImageMenuHandler = (e)=>{ if(!menu.contains(e.target)) closeImageMenu(); };
+  setTimeout(()=>document.addEventListener('pointerdown', closeImageMenuHandler, true), 0);
+}
+
+function setImageSize(card, wrap, size){
+  ['size-sm','size-md','size-lg'].forEach(c=>wrap.classList.remove(c));
+  if(size !== 'full') wrap.classList.add('size-' + size);
+  wrap.dataset.size = size;
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
+}
+
+function moveImageBlock(card, wrap, direction){
+  const editorEl = document.getElementById('scriptEditor');
+  if(!editorEl || !wrap.parentNode) return;
+  const isBlankSpacer = n => !!(n && n.nodeType===1 && n.tagName==='P' && !n.textContent.trim());
+  // Swap with the immediately adjacent sibling — one paragraph (or image) at
+  // a time — whatever that sibling is. Earlier this skipped over paragraph
+  // text to jump straight to the next image, which meant "move down" could
+  // leap the image past several paragraphs in one click; moving one block at
+  // a time keeps reordering predictable relative to the surrounding text.
+  //
+  // One wrinkle: when two images sit directly next to each other,
+  // ensureImageSpacers keeps a blank spacer paragraph between them (so
+  // there's somewhere to click a caret). That spacer isn't real content —
+  // it's dropped on save — so a swap that only moves an image past the
+  // spacer (not past the other image) is invisible: ensureImageSpacers
+  // immediately reinserts an equivalent spacer on the other side, undoing
+  // the visible effect of the click. So a blank spacer is treated as
+  // transparent here: it's removed and hopped over, so the swap lands on
+  // the next real block (image or non-empty paragraph) and the two images
+  // actually trade places. ensureImageSpacers regenerates whatever spacer
+  // is needed afterward.
+  if(direction<0){
+    let sib = wrap.previousSibling;
+    if(isBlankSpacer(sib)){
+      const spacer = sib;
+      sib = sib.previousSibling;
+      spacer.remove();
+    }
+    if(sib) editorEl.insertBefore(wrap, sib);
+  } else {
+    let sib = wrap.nextSibling;
+    if(isBlankSpacer(sib)){
+      const spacer = sib;
+      sib = sib.nextSibling;
+      spacer.remove();
+    }
+    if(sib) editorEl.insertBefore(sib, wrap);
+  }
+  ensureImageSpacers(editorEl);
+  card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
+}
+
+// ---- crop ----
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function closeCropper(){
+  document.getElementById('cropOverlay-el').classList.remove('open');
+  document.getElementById('cropModal-el').innerHTML = '';
+}
+
+function openCropper(card, path, wrapEl){
+  const probe = new Image();
+  probe.onload = ()=>{
+    const modal = document.getElementById('cropModal-el');
+    modal.innerHTML = '';
+    const h2 = document.createElement('h2'); h2.textContent = 'Crop image';
+    const stage = document.createElement('div'); stage.className = 'cropstage'; stage.id = 'cropStage';
+    const cropImgEl = document.createElement('img'); cropImgEl.id = 'cropImg'; cropImgEl.src = imgSrc(path);
+    const rect = document.createElement('div'); rect.className = 'croprect'; rect.id = 'cropRect';
+    ['nw','ne','sw','se'].forEach(pos=>{
+      const h = document.createElement('div'); h.className = 'crophandle '+pos; h.dataset.h = pos;
+      rect.appendChild(h);
+    });
+    stage.appendChild(cropImgEl); stage.appendChild(rect);
+    const actions = document.createElement('div'); actions.className = 'modal-actions';
+    const left = document.createElement('div'); left.className = 'left';
+    const cancelBtn = document.createElement('button'); cancelBtn.className='ghost'; cancelBtn.textContent='Cancel'; cancelBtn.type='button';
+    const applyBtn = document.createElement('button'); applyBtn.className='primary'; applyBtn.textContent='Apply crop'; applyBtn.type='button';
+    left.appendChild(cancelBtn); actions.appendChild(left); actions.appendChild(applyBtn);
+    modal.appendChild(h2); modal.appendChild(stage); modal.appendChild(actions);
+    document.getElementById('cropOverlay-el').classList.add('open');
+    cancelBtn.onclick = closeCropper;
+
+    requestAnimationFrame(()=>{
+      const sw = stage.clientWidth, sh = cropImgEl.clientHeight;
+      if(!sw || !sh){ closeCropper(); setSyncStatus('bad', "Couldn't open the cropper — try again."); return; }
+      let box = { x: sw*0.1, y: sh*0.1, w: sw*0.8, h: sh*0.8 };
+      const applyRectStyle = ()=>{
+        rect.style.left = box.x+'px'; rect.style.top = box.y+'px';
+        rect.style.width = box.w+'px'; rect.style.height = box.h+'px';
+      };
+      applyRectStyle();
+
+      let mode = null, startPt = null, startBox = null;
+      const MIN = 24;
+      const onDown = (e, m)=>{
+        mode = m; startPt = {x:e.clientX, y:e.clientY}; startBox = Object.assign({}, box);
+        if(e.target.setPointerCapture){ try{ e.target.setPointerCapture(e.pointerId); }catch(err){} }
+        e.preventDefault();
+      };
+      const onMove = (e)=>{
+        if(!mode) return;
+        const dx = e.clientX-startPt.x, dy = e.clientY-startPt.y;
+        if(mode==='move'){
+          // Pure translation: size never changes, so clamp position against
+          // the box's own (unchanging) width/height.
+          box.x = Math.max(0, Math.min(startBox.x+dx, sw - box.w));
+          box.y = Math.max(0, Math.min(startBox.y+dy, sh - box.h));
+        } else {
+          // Resize: the opposite edge/corner is the anchor and must stay put.
+          // Clamp the *moving* edge against the stage and the anchor, then
+          // derive x/w (or y/h) from that — clamping x and w independently
+          // (as before) let a far-negative x inflate w past the stage edge.
+          if(mode.indexOf('w')!==-1){
+            const anchorRight = startBox.x + startBox.w;
+            const left = Math.max(0, Math.min(startBox.x+dx, anchorRight-MIN));
+            box.x = left; box.w = anchorRight - left;
+          }
+          if(mode.indexOf('e')!==-1){
+            const anchorLeft = startBox.x;
+            const right = Math.min(sw, Math.max(startBox.x+startBox.w+dx, anchorLeft+MIN));
+            box.w = right - anchorLeft;
+          }
+          if(mode.indexOf('n')!==-1){
+            const anchorBottom = startBox.y + startBox.h;
+            const top = Math.max(0, Math.min(startBox.y+dy, anchorBottom-MIN));
+            box.y = top; box.h = anchorBottom - top;
+          }
+          if(mode.indexOf('s')!==-1){
+            const anchorTop = startBox.y;
+            const bottom = Math.min(sh, Math.max(startBox.y+startBox.h+dy, anchorTop+MIN));
+            box.h = bottom - anchorTop;
+          }
+        }
+        applyRectStyle();
+      };
+      const onUp = ()=>{ mode = null; };
+
+      rect.addEventListener('pointerdown', (e)=>{ if(e.target.classList.contains('crophandle')) return; onDown(e, 'move'); });
+      rect.querySelectorAll('.crophandle').forEach(h=>{
+        h.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); onDown(e, h.dataset.h); });
+      });
+      stage.addEventListener('pointermove', onMove);
+      stage.addEventListener('pointerup', onUp);
+      stage.addEventListener('pointercancel', onUp);
+
+      applyBtn.onclick = ()=>{
+        const scaleX = cropImgEl.naturalWidth / sw;
+        const scaleY = cropImgEl.naturalHeight / sh;
+        const sx = box.x*scaleX, sy = box.y*scaleY, sWid = box.w*scaleX, sHei = box.h*scaleY;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(sWid));
+        canvas.height = Math.max(1, Math.round(sHei));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(cropImgEl, sx, sy, sWid, sHei, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob)=>{
+          if(!blob){ setSyncStatus('bad', 'Crop failed — could not process the image.'); return; }
+          closeCropper();
+          await applyCroppedImage(card, path, wrapEl, blob);
+        }, 'image/png');
+      };
+    });
+  };
+  probe.onerror = ()=>{ setSyncStatus('bad', "Couldn't load this image to crop — try again once it's finished syncing."); };
+  probe.src = imgSrc(path);
+}
+
+async function applyCroppedImage(card, oldPath, wrapEl, blob){
+  if(!syncEnabled || !ghConfig){ setSyncStatus('bad', 'Connect to GitHub in Settings before cropping images.'); return; }
+  setSyncStatus('', 'Saving cropped image…');
+  try{
+    const base64 = await blobToBase64(blob);
+    const newPath = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.png';
+    localImageBlobs.set(newPath, URL.createObjectURL(blob));
+    await ghPutBinaryFile(newPath, base64, 'Crop image for card ' + card.id);
+    card.images = (card.images||[]).filter(i=>i.path!==oldPath);
+    card.images.push({path:newPath});
+    if(wrapEl && wrapEl.isConnected){
+      wrapEl.dataset.path = newPath;
+      const imgEl = wrapEl.querySelector('img');
+      if(imgEl) imgEl.src = imgSrc(newPath);
+    }
+    if(localImageBlobs.has(oldPath)){ URL.revokeObjectURL(localImageBlobs.get(oldPath)); localImageBlobs.delete(oldPath); }
+    const editorEl = document.getElementById('scriptEditor');
+    if(editorEl) card.script = serializeScriptEditor(editorEl);
+    saveToGitHub();
+    ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Remove pre-crop original for card ' + card.id); }).catch(()=>{});
+  }catch(err){
+    setSyncStatus('bad', 'Crop upload failed — check your GitHub connection in Settings.');
+  }
+}
+
+// Two inline images with nothing between them leave no ordinary text node in
+// that gap for a tap to land a caret on — mobile browsers were snapping the
+// cursor somewhere unexpected instead of where the user meant. Whenever two
+// images end up directly adjacent (initial render, after inserting new
+// images, after removing one that was separating two others, after a
+// reorder), automatically slot in a plain empty paragraph between them so
+// there's always a normal tap target there. It's an ordinary editable
+// paragraph like any other — if the user never types into it, it simply
+// isn't saved (serializeScriptEditor drops empty paragraphs), so it doesn't
+// pollute the script text; it just quietly reappears next time this runs.
+function ensureImageSpacers(editorEl){
+  const isImg = n => !!(n && n.nodeType===1 && n.classList && n.classList.contains('inline-imgwrap'));
+  const isBlankP = n => !!(n && n.nodeType===1 && n.tagName==='P' && !n.textContent.trim());
+  // Collapse runs of consecutive blank paragraphs first — e.g. removing an
+  // image that used to sit between two spacer paragraphs would otherwise
+  // leave both spacers behind as a stray double gap.
+  let node = editorEl.firstChild;
+  while(node){
+    const next = node.nextSibling;
+    if(isBlankP(node) && isBlankP(next)){
+      editorEl.removeChild(next);
+      continue; // re-check node against its new next sibling
+    }
+    node = next;
+  }
+  // An image with nothing before/after it inside the editor leaves no
+  // ordinary text node at the very top/bottom of the box for a click to
+  // land a caret on — the wrapper is an atomic, non-editable island
+  // (contentEditable="false"), so a card whose script is just one image,
+  // or that starts/ends with one, left no editable spot to click into at
+  // all. Same fix as the between-two-images case below, applied at the
+  // two edges of the editor.
+  if(isImg(editorEl.firstChild)){
+    const spacer = document.createElement('p');
+    spacer.appendChild(document.createElement('br'));
+    editorEl.insertBefore(spacer, editorEl.firstChild);
+  }
+  if(isImg(editorEl.lastChild)){
+    const spacer = document.createElement('p');
+    spacer.appendChild(document.createElement('br'));
+    editorEl.appendChild(spacer);
+  }
+  // Then make sure every remaining pair of directly-adjacent images has a
+  // blank paragraph between them.
+  node = editorEl.firstChild;
+  while(node && node.nextSibling){
+    const next = node.nextSibling;
+    if(isImg(node) && isImg(next)){
+      const spacer = document.createElement('p');
+      spacer.appendChild(document.createElement('br'));
+      editorEl.insertBefore(spacer, next);
+    }
+    node = node.nextSibling;
+  }
+}
+
+// A block starting with 1-3 '#' + a space is a heading (Substack/markdown
+// convention — matches how the Substack draft generator already ships the
+// script text verbatim). Only the block's first line is checked; any further
+// lines in the same block (rare — Enter inside a heading normally starts a
+// new block) still ride along inside the same heading element via <br>, the
+// same way multi-line paragraphs already work.
+const HEADER_LINE_RE = /^(#{1,3})\s+([^\n]*)/;
+
+// A block whose entire first line is "[^N]: <text>" is a footnote
+// definition, not an ordinary paragraph — always kept sorted to the very
+// end of the script text (see appendFootnoteDef) and rendered as its own
+// row under a "Footnotes" divider instead of a plain <p>.
+const FOOTNOTE_DEF_RE = /^\[\^(\d+)\]:\s*([\s\S]*)$/;
+
+function populateScriptEditor(editorEl, script, card){
+  editorEl.innerHTML = '';
+  const blocks = (script || '').split(/\n{2,}/);
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(!trimmed) return;
+    if(isImageLine(trimmed)){
+      editorEl.appendChild(buildImageNode(card, imageLinePath(trimmed), imageLineCaption(trimmed), imageLineSize(trimmed)));
+      return;
+    }
+    const fnDefMatch = FOOTNOTE_DEF_RE.exec(trimmed);
+    if(fnDefMatch){
+      if(!editorEl.querySelector('.footnote-divider')){
+        const divider = document.createElement('div');
+        divider.className = 'footnote-divider';
+        divider.contentEditable = 'false';
+        divider.textContent = 'Footnotes';
+        editorEl.appendChild(divider);
+      }
+      editorEl.appendChild(buildFootnoteDefNode(fnDefMatch[1], fnDefMatch[2]));
+      return;
+    }
+    const headerMatch = HEADER_LINE_RE.exec(trimmed);
+    if(headerMatch){
+      const h = document.createElement('h' + headerMatch[1].length);
+      const rest = trimmed.slice(headerMatch[0].length);
+      appendInlineMarkdown(h, headerMatch[2]);
+      if(rest.startsWith('\n')){
+        rest.slice(1).split('\n').forEach(line=>{
+          h.appendChild(document.createElement('br'));
+          appendInlineMarkdown(h, line);
+        });
+      }
+      editorEl.appendChild(h);
+      return;
+    }
+    const p = document.createElement('p');
+    trimmed.split('\n').forEach((line,idx)=>{
+      if(idx>0) p.appendChild(document.createElement('br'));
+      appendInlineMarkdown(p, line);
+    });
+    editorEl.appendChild(p);
+  });
+  ensureImageSpacers(editorEl);
+  updateWordCountBar(editorEl);
+}
+
+// Inline formatting (bold, italic, underline, links) is stored as ordinary
+// markdown/HTML mixed into the plain text — **bold**, *italic*, <u>underline</u>,
+// [label](url) — the same way images and sources already ride along as
+// markdown, so the script stays a single portable string (and drops straight
+// into the Substack draft generator verbatim). appendInlineMarkdown turns
+// that back into real <b>/<i>/<u>/<a class="scriptlink"> elements when the
+// editor is (re)populated, recursing so marks can nest (e.g. a bold link);
+// the reverse direction lives in serializeInlineContent below. Shared by
+// script paragraphs, headings, and image captions alike.
+function appendInlineMarkdown(parent, text){
+  let i = 0;
+  while(i < text.length){
+    if(text.startsWith('**', i)){
+      const end = text.indexOf('**', i+2);
+      if(end !== -1){
+        const b = document.createElement('b');
+        appendInlineMarkdown(b, text.slice(i+2, end));
+        parent.appendChild(b);
+        i = end+2;
+        continue;
+      }
+    }
+    if(text[i] === '*'){
+      const end = text.indexOf('*', i+1);
+      if(end !== -1){
+        const em = document.createElement('i');
+        appendInlineMarkdown(em, text.slice(i+1, end));
+        parent.appendChild(em);
+        i = end+1;
+        continue;
+      }
+    }
+    if(text.startsWith('<u>', i)){
+      const end = text.indexOf('</u>', i+3);
+      if(end !== -1){
+        const u = document.createElement('u');
+        appendInlineMarkdown(u, text.slice(i+3, end));
+        parent.appendChild(u);
+        i = end+4;
+        continue;
+      }
+    }
+    if(text[i] === '[' && text[i+1] === '^'){
+      const close = text.indexOf(']', i+2);
+      if(close !== -1 && /^\d+$/.test(text.slice(i+2, close))){
+        const num = text.slice(i+2, close);
+        const sup = document.createElement('sup');
+        sup.className = 'footnote-ref';
+        sup.contentEditable = 'false';
+        sup.dataset.fn = num;
+        sup.textContent = num;
+        sup.title = 'Footnote ' + num + ' — click to jump to it';
+        sup.onclick = (e)=>{ e.preventDefault(); jumpToFootnoteDef(sup.dataset.fn); };
+        parent.appendChild(sup);
+        i = close+1;
+        continue;
+      }
+    }
+    if(text[i] === '['){
+      const closeBracket = text.indexOf(']', i+1);
+      if(closeBracket !== -1 && text[closeBracket+1] === '('){
+        const closeParen = text.indexOf(')', closeBracket+2);
+        if(closeParen !== -1){
+          const a = document.createElement('a');
+          a.className = 'scriptlink';
+          a.href = text.slice(closeBracket+2, closeParen);
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          appendInlineMarkdown(a, text.slice(i+1, closeBracket));
+          parent.appendChild(a);
+          i = closeParen+1;
+          continue;
+        }
+      }
+    }
+    // Plain run: consume up to the next character that could start a marker,
+    // so ordinary text isn't scanned one character at a time.
+    let j = i+1;
+    while(j < text.length && text[j] !== '*' && text[j] !== '[' && !(text[j]==='<' && text.startsWith('<u>', j))) j++;
+    parent.appendChild(document.createTextNode(text.slice(i, j)));
+    i = j;
+  }
+}
+
+// Recursive so nested marks (bold containing a link, etc.) round-trip
+// correctly. Any element tag not recognized below (e.g. a stray <span>
+// left by the browser) is unwrapped — its text survives, the wrapper doesn't.
+function serializeInlineContent(el){
+  let text = '';
+  el.childNodes.forEach(n=>{
+    if(n.nodeName === 'BR'){ text += '\n'; return; }
+    if(n.nodeType !== 1){ text += n.textContent || ''; return; }
+    const inner = serializeInlineContent(n);
+    const tag = n.tagName;
+    if(tag === 'A'){
+      const href = n.getAttribute('href') || '';
+      text += inner ? ('[' + inner + '](' + href + ')') : href;
+    } else if(tag === 'B' || tag === 'STRONG'){
+      text += inner ? ('**' + inner + '**') : '';
+    } else if(tag === 'I' || tag === 'EM'){
+      text += inner ? ('*' + inner + '*') : '';
+    } else if(tag === 'U'){
+      text += inner ? ('<u>' + inner + '</u>') : '';
+    } else if(tag === 'SUP' && n.classList.contains('footnote-ref')){
+      text += '[^' + (n.dataset.fn || '') + ']';
+    } else {
+      text += inner;
+    }
+  });
+  return text;
+}
+
+const HEADER_PREFIX = {H1:'# ', H2:'## ', H3:'### '};
+
+function serializeScriptEditor(editorEl){
+  const parts = [];
+  editorEl.childNodes.forEach(node=>{
+    if(node.nodeType===1 && node.classList && node.classList.contains('inline-imgwrap')){
+      const capEl = node.querySelector('.imgcaption');
+      parts.push(scriptImageTag(node.dataset.path, capEl ? serializeInlineContent(capEl).trim() : '', node.dataset.size));
+    } else if(node.nodeType===1 && node.classList && node.classList.contains('footnote-def')){
+      const bodyEl = node.querySelector('.footnote-def-text');
+      parts.push('[^' + node.dataset.fn + ']: ' + (bodyEl ? serializeInlineContent(bodyEl).trim() : ''));
+    } else if(node.nodeType===1 && node.classList && node.classList.contains('footnote-divider')){
+      // purely a visual separator, regenerated by populateScriptEditor — not part of the saved text
+    } else if(node.nodeType===1 && HEADER_PREFIX[node.tagName]){
+      const text = serializeInlineContent(node);
+      if(text.trim()) parts.push(HEADER_PREFIX[node.tagName] + text);
+    } else if(node.nodeType===1){
+      const text = serializeInlineContent(node);
+      if(text.trim()) parts.push(text);
+    } else if(node.nodeType===3){
+      if(node.textContent.trim()) parts.push(node.textContent);
+    }
+  });
+  return parts.join('\n\n').trim();
+}
+
+// Inline image wrappers must always be direct children of the editor —
+// serializeScriptEditor only recognizes them there, and populateScriptEditor
+// only ever produces them there. If the caret sits mid-paragraph, inserting
+// the node with Range.insertNode() would nest it inside the surrounding <p>
+// alongside text nodes, and the image reference would be silently lost on
+// serialize (the wrapper's remove-button text is all that survives). So
+// split the paragraph in two around the caret and insert the image between
+// the halves as top-level siblings instead.
+function splitBlockAndInsert(editorEl, range, node){
+  let blockNode = range.startContainer;
+  while(blockNode && blockNode.parentNode !== editorEl){
+    blockNode = blockNode.parentNode;
+  }
+  if(!blockNode){
+    editorEl.appendChild(node);
+    const r = document.createRange();
+    r.setStartAfter(node); r.collapse(true);
+    return r;
+  }
+  if(blockNode === editorEl || (blockNode.classList && blockNode.classList.contains('inline-imgwrap'))){
+    // Caret directly in the editor (empty editor) or landed on an existing
+    // atomic image wrapper - just drop the new node right after it.
+    if(blockNode === editorEl){
+      range.insertNode(node);
+    } else {
+      editorEl.insertBefore(node, blockNode.nextSibling);
+    }
+    const r = document.createRange();
+    r.setStartAfter(node); r.collapse(true);
+    return r;
+  }
+  // blockNode is a paragraph - split it at the caret, node goes in between.
+  const preRange = document.createRange();
+  preRange.setStart(blockNode, 0);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const postRange = document.createRange();
+  postRange.setStart(range.startContainer, range.startOffset);
+  postRange.setEnd(blockNode, blockNode.childNodes.length);
+
+  const beforeP = document.createElement('p');
+  beforeP.appendChild(preRange.cloneContents());
+  const afterP = document.createElement('p');
+  afterP.appendChild(postRange.cloneContents());
+
+  function fragHasContent(el){
+    return Array.from(el.childNodes).some(n=> n.nodeType===1 || (n.textContent && n.textContent.length));
+  }
+
+  const toInsert = [];
+  if(fragHasContent(beforeP)) toInsert.push(beforeP);
+  toInsert.push(node);
+  let afterPUsed = false;
+  if(fragHasContent(afterP)){ toInsert.push(afterP); afterPUsed = true; }
+
+  toInsert.forEach(n=> editorEl.insertBefore(n, blockNode));
+  editorEl.removeChild(blockNode);
+
+  const r = document.createRange();
+  if(afterPUsed) r.setStart(afterP, 0);
+  else r.setStartAfter(node);
+  r.collapse(true);
+  return r;
+}
+
+async function insertImagesIntoScript(card, fileList){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+  if(!syncEnabled || !ghConfig){
+    setSyncStatus('bad', 'Connect to GitHub in Settings before uploading images.');
+    return;
+  }
+  const editorEl = document.getElementById('scriptEditor');
+  let range = (savedEditorRange && editorEl.contains(savedEditorRange.startContainer)) ? savedEditorRange.cloneRange() : null;
+  if(!range){
+    range = document.createRange();
+    range.selectNodeContents(editorEl);
+    range.collapse(false);
+  }
+  const statusEl = document.getElementById('imgUploadStatus');
+  for(const file of files){
+    if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
+    try{
+      const base64 = await fileToBase64(file);
+      const ext = safeExt(file.name);
+      const path = 'data/images/' + card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
+      localImageBlobs.set(path, URL.createObjectURL(file));
+      await ghPutBinaryFile(path, base64, 'Add image for card ' + card.id);
+      card.images.push({path});
+      const node = buildImageNode(card, path);
+      range.deleteContents();
+      range = splitBlockAndInsert(editorEl, range, node);
+    }catch(err){
+      setSyncStatus('bad', 'Image upload failed — check your GitHub connection in Settings.');
+    }
+  }
+  if(statusEl) statusEl.textContent = '';
+  ensureImageSpacers(editorEl);
+  card.script = serializeScriptEditor(editorEl);
+  saveToGitHub();
+}
+
+function removeInlineImageNode(card, wrapEl, path){
+  wrapEl.remove();
+  card.images = (card.images||[]).filter(i=>i.path!==path);
+  if(localImageBlobs.has(path)){ URL.revokeObjectURL(localImageBlobs.get(path)); localImageBlobs.delete(path); }
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) card.script = serializeScriptEditor(editorEl);
+  if(syncEnabled){
+    ghGetFile(path).then(file=>{ if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id); }).catch(()=>{});
+  }
+  saveToGitHub();
+  if(editorEl) ensureImageSpacers(editorEl);
+}
+
+function deleteImageEverywhere(card, path){
+  card.script = removeImageFromScript(card.script || '', path);
+  card.images = (card.images||[]).filter(i=>i.path!==path);
+  if(localImageBlobs.has(path)){ URL.revokeObjectURL(localImageBlobs.get(path)); localImageBlobs.delete(path); }
+  if(syncEnabled){
+    ghGetFile(path).then(file=>{
+      if(file) ghDeleteFile(path, file.sha, 'Remove image for card ' + card.id);
+    }).catch(()=>{});
+  }
+}
+
+// The cover image is a separate single slot from the inline script images —
+// it's the thumbnail Substack (and eventually other platforms) shows for the
+// post, not a paragraph inside the script itself. Uploaded the same way as
+// inline images (GitHub-hosted, with an instant local blob preview so it
+// doesn't show broken while Pages catches up).
+async function setCoverImage(card, file){
+  if(!syncEnabled || !ghConfig){
+    setSyncStatus('bad', 'Connect to GitHub in Settings before uploading images.');
+    return;
+  }
+  const statusEl = document.getElementById('coverImgStatus');
+  if(statusEl) statusEl.textContent = 'Uploading ' + file.name + '…';
+  const oldPath = card.coverImage ? card.coverImage.path : null;
+  try{
+    const base64 = await fileToBase64(file);
+    const ext = safeExt(file.name);
+    const path = 'data/images/' + card.id + '-cover-' + Date.now() + '-' + Math.random().toString(36).slice(2,6) + '.' + ext;
+    localImageBlobs.set(path, URL.createObjectURL(file));
+    await ghPutBinaryFile(path, base64, 'Set cover image for card ' + card.id);
+    card.coverImage = {path};
+    if(statusEl) statusEl.textContent = '';
+    renderModal();
+    saveToGitHub();
+    if(oldPath){
+      ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Replace cover image for card ' + card.id); }).catch(()=>{});
+    }
+  }catch(err){
+    setSyncStatus('bad', 'Cover image upload failed — check your GitHub connection in Settings.');
+  }
+}
+
+function removeCoverImage(card){
+  const oldPath = card.coverImage ? card.coverImage.path : null;
+  card.coverImage = null;
+  renderModal();
+  saveToGitHub();
+  if(oldPath && syncEnabled){
+    ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Remove cover image for card ' + card.id); }).catch(()=>{});
+  }
+}
+
+function renderModal(){
+  const c = getCard();
+  if(!c) return;
+  const modal = document.getElementById('modal-el');
+  const tagsInputVal = c.tags.join(', ');
+
+  const orphans = orphanedImages(c);
+  const orphansHtml = orphans.length
+    ? '<div class="field"><label>Uploaded but not placed in the script yet</label>' +
+        orphans.map(img=>
+          '<div class="orphan-row"><img src="'+escapeHtml(imgSrc(img.path))+'">' +
+          '<button class="small-btn" data-place-img="'+escapeHtml(img.path)+'">Insert into script</button>' +
+          '<button class="small-btn" data-drop-img="'+escapeHtml(img.path)+'" style="background:var(--danger-soft);color:var(--danger);">Delete</button></div>'
+        ).join('') +
+      '</div>'
+    : '';
+
+  let platformsHtml = '';
+  if(c.stage==='distributing'){
+    const {done,total} = distributionProgress(c);
+    const allDone = done===total;
+    platformsHtml += '<div class="field"><label>Distribution</label>';
+    platformsHtml += allDone
+      ? '<div class="banner done">All '+total+' platforms marked complete. Source video in Drive can be deleted 7 days after the last post — auto-delete date: <strong>'+addDays(new Date(),7)+'</strong>.</div>'
+      : '<div class="banner">'+done+'/'+total+' platforms posted. This card is your live backlog for what\'s left.</div>';
+    platformsHtml += '<div class="field" style="margin-top:8px;"><label>Base caption (usually TikTok\'s)</label><textarea id="baseCaption">'+escapeHtml(c.baseCaption)+'</textarea>' +
+      '<div class="charcount" id="baseCaptionCount" style="text-align:left;">'+ (c.baseCaption||'').length +' characters</div>' +
+      '<div class="note">Every platform box below updates automatically as you type here, with each platform\'s own hashtag/length rules applied.</div>' +
+      '<button class="small-btn" id="genCaptions" style="margin-top:6px;">Force re-sync captions now</button>' +
+      '<div class="note">Platform limits — ' + PLATFORMS.filter(p=>!p.isSubstack).map(p=>{
+        let bit = p.label + ': ' + (p.limit ? p.limit + ' chars' : 'no limit');
+        if(!p.hashtags) bit += ' (hashtags stripped)';
+        return bit;
+      }).join(' · ') + '</div>' +
+    '</div>';
+
+    PLATFORMS.forEach(p=>{
+      const st = c.platforms[p.key];
+      if(p.isSubstack){
+        const coverThumb = c.coverImage
+          ? '<div class="cover-image-preview" style="margin-top:8px;"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><span class="note">Cover image (set above)</span></div>'
+          : '<div class="note" style="margin-top:8px;">No cover image set — add one at the top of this card.</div>';
+        const tagNote = c.tags.length ? '<div class="note">Tags: '+c.tags.map(escapeHtml).join(', ')+'</div>' : '';
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="drafted" '+(st.status==='drafted'?'selected':'')+'>Drafted</option>' +
+            '<option value="published" '+(st.status==='published'?'selected':'')+'>Published</option>' +
+          '</select></div>' +
+          coverThumb + tagNote +
+          '<div class="note" style="margin:8px 0 4px;">Copy each piece, paste it into Substack\'s own editor:</div>' +
+          '<div class="script-toolbar">' +
+            '<button class="small-btn" id="copySubstackTitleBtn">📋 Title</button>' +
+            (c.subtitle ? '<button class="small-btn" id="copySubstackSubtitleBtn">📋 Subtitle</button>' : '') +
+            '<button class="small-btn" id="copySubstackScriptBtn">📋 Formatted script</button>' +
+            (c.coverImage ? '<button class="small-btn" id="copySubstackCoverBtn">📋 Cover image</button>' : '') +
+          '</div>' +
+          '<button class="ghost" id="openSubstackTabBtn" style="margin-top:8px;width:100%;">↗ Open new Substack post</button>' +
+          (/\[\^\d+\]:/.test(c.script||'') ?
+            '<div class="note" style="margin-top:8px;">This script has footnotes. Substack won’t turn a pasted "[^N]" into one of its own real footnotes — use the Notes list at the end of the formatted-script paste as your reference and re-add each one with Substack’s own footnote button.</div>'
+            : '') +
+          '<button class="small-btn" id="genSubstack" style="margin-top:8px;">Generate plain-text draft from script</button>' +
+          '<textarea style="margin-top:6px;min-height:110px;" data-plat="'+p.key+'" data-field="draft" placeholder="Substack draft...">'+escapeHtml(st.draft)+'</textarea>' +
+          linkFieldHtml(p.key, st.link, 'Published link') +
+        '</div>';
+      } else if(p.isBluesky){
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit, no hashtags)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for '+p.label+'">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          '<input type="file" id="bskyVideoInput" accept="video/*" style="display:none">' +
+          '<button class="primary" type="button" id="postBlueskyBtn" style="margin-top:8px;width:100%;">🦋 Post video to Bluesky</button>' +
+          '<div class="note" id="bskyPostStatus" style="margin-top:4px;"></div>' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
+        '</div>';
+      } else if(p.isYouTube){
+        const count = st.caption.length;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<input type="text" data-plat="'+p.key+'" data-field="title" placeholder="YouTube title (leave blank to use: '+escapeHtml(c.title||'Untitled')+')" value="'+escapeHtml(st.title)+'" style="margin-bottom:8px;">' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Description for YouTube (hashtags OK)">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount">'+count+'</div>' +
+          '<div class="note">Set a YouTube-specific title above, or leave it blank to just use the card\'s own title. Under 3 minutes → posted as a Short with an auto thumbnail (video\'s first frame). 3 minutes or longer → a regular video, and you\'ll be asked to pick your own horizontal thumbnail before it uploads.</div>' +
+          '<input type="file" id="ytVideoInput" accept="video/*" style="display:none">' +
+          '<input type="file" id="ytThumbInput" accept="image/*" style="display:none">' +
+          '<button class="primary" type="button" id="postYoutubeBtn" style="margin-top:8px;width:100%;">▶ Post video to YouTube</button>' +
+          '<div class="note" id="ytPostStatus" style="margin-top:4px;"></div>' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
+        '</div>';
+      } else if(p.isInstagram){
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for Instagram">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          '<div class="note">Posts as a Reel. The video is committed into your GitHub repo first (so Instagram has a public URL to fetch it from), then Instagram processes and publishes it — this can take a minute or two.</div>' +
+          '<input type="file" id="igVideoInput" accept="video/*" style="display:none">' +
+          '<button class="primary" type="button" id="postInstagramBtn" style="margin-top:8px;width:100%;">📷 Post video to Instagram</button>' +
+          '<div class="note" id="igPostStatus" style="margin-top:4px;"></div>' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
+        '</div>';
+      } else {
+        const count = st.caption.length;
+        const over = p.limit && count>p.limit;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+(p.limit ? ' <span class="note">('+p.limit+' char limit)</span>':'')+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for '+p.label+'">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount '+(over?'over':'')+'">'+count+(p.limit ? ' / '+p.limit : '')+'</div>' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
+        '</div>';
+      }
+    });
+    platformsHtml += '</div>';
+  }
+
+  modal.innerHTML =
+    '<h2>Edit idea <span class="stagepill">'+STAGES.find(s=>s.key===c.stage).label+'</span></h2>' +
+    '<div class="field"><label>Title</label><input type="text" id="titleInput" value="'+escapeHtml(c.title)+'"></div>' +
+    '<div class="field"><label>Subtitle</label><input type="text" id="subtitleInput" value="'+escapeHtml(c.subtitle||'')+'" placeholder="Optional — shown under the title on Substack"></div>' +
+    '<div class="field"><label>Cover image</label>' +
+      '<input type="file" id="coverImageInput" accept="image/*" style="display:none">' +
+      (c.coverImage
+        ? '<div class="cover-image-preview"><img src="'+escapeHtml(imgSrc(c.coverImage.path))+'"><div class="cover-image-actions"><button class="small-btn" type="button" id="changeCoverBtn">Change</button><button class="small-btn" type="button" id="removeCoverBtn" style="background:var(--danger-soft);color:var(--danger);">Remove</button></div></div>'
+        : '<button class="small-btn" type="button" id="setCoverBtn">🖼 Set cover image</button>') +
+      '<span class="note" id="coverImgStatus"></span>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field"><label>Stage</label><select id="stageInput">' +
+        STAGES.map(s=>'<option value="'+s.key+'" '+(s.key===c.stage?'selected':'')+'>'+s.label+'</option>').join('') +
+      '</select></div>' +
+      '<div class="field"><label>Tags (comma separated)</label><input type="text" id="tagsInput" value="'+escapeHtml(tagsInputVal)+'"></div>' +
+    '</div>' +
+    '<div class="field"><label>Script</label>' +
+      '<input type="file" id="scriptImageInput" accept="image/*" multiple style="display:none">' +
+      '<div class="script-editor" id="scriptEditor" contenteditable="true" data-placeholder="Write your script here, or research notes if still capturing... tap Insert image to drop a screenshot or chart in wherever your cursor is."></div>' +
+      '<div class="wordcount-bar"><span class="wordcount-text" id="wordcountText">0 words</span></div>' +
+      orphansHtml +
+      '<div class="script-toolbar">' +
+        '<button class="small-btn" type="button" id="insertImageBtn">🖼 Insert image</button>' +
+        '<button class="small-btn" type="button" id="typingUndoBtn" title="Undo last typing change">&#8630; Undo</button>' +
+        '<span class="note" id="imgUploadStatus"></span></div>' +
+      '<div class="note">Right-click text (or long-press on mobile) for formatting — bold/italic/underline, links, paragraph style — and to add a footnote. Right-click with nothing selected for just paragraph style / footnote.</div>' +
+    '</div>' +
+    platformsHtml +
+    '<div class="modal-actions">' +
+      '<div class="left"><button class="ghost" id="markDead">'+(c.dead ? 'Restore from archive' : "Mark: didn't pan out")+'</button>' +
+      '<button class="ghost" id="deleteCard" style="color:#a3402f;border-color:#a3402f;">Delete</button></div>' +
+      '<div><button class="ghost" id="closeModalBtn">Close</button><button class="primary" id="saveModal">Save</button></div>' +
+    '</div>';
+
+  document.getElementById('stageInput').onchange = ()=>{ commitModalFields(); renderModal(); };
+  document.getElementById('closeModalBtn').onclick = closeModal;
+  document.getElementById('saveModal').onclick = ()=>{ commitModalFields(); closeModal(); saveToGitHub(); };
+  document.getElementById('markDead').onclick = ()=>{ commitModalFields(); c.dead = !c.dead; renderModal(); saveToGitHub(); };
+  document.getElementById('deleteCard').onclick = ()=>{
+    state.cards = state.cards.filter(x=>x.id!==c.id);
+    closeModal();
+    saveToGitHub();
+  };
+  populateScriptEditor(document.getElementById('scriptEditor'), c.script, c);
+  document.getElementById('insertImageBtn').onclick = ()=> document.getElementById('scriptImageInput').click();
+  const setCoverBtn = document.getElementById('setCoverBtn');
+  if(setCoverBtn) setCoverBtn.onclick = ()=> document.getElementById('coverImageInput').click();
+  const changeCoverBtn = document.getElementById('changeCoverBtn');
+  if(changeCoverBtn) changeCoverBtn.onclick = ()=> document.getElementById('coverImageInput').click();
+  const removeCoverBtn = document.getElementById('removeCoverBtn');
+  if(removeCoverBtn) removeCoverBtn.onclick = ()=> removeCoverImage(c);
+  const coverImageInput = document.getElementById('coverImageInput');
+  if(coverImageInput) coverImageInput.onchange = (e)=>{
+    if(e.target.files && e.target.files[0]) setCoverImage(c, e.target.files[0]);
+    e.target.value = '';
+  };
+  document.getElementById('scriptImageInput').onchange = (e)=>{
+    insertImagesIntoScript(c, e.target.files);
+    e.target.value = '';
+  };
+  const typingUndoBtn = document.getElementById('typingUndoBtn');
+  if(typingUndoBtn){
+    typingUndoBtn.addEventListener('mousedown', (e)=>e.preventDefault()); // don't steal focus/selection from the field being corrected
+    typingUndoBtn.addEventListener('click', triggerTypingUndo);
+  }
+  modal.addEventListener('focusin', (e)=>{
+    const t = e.target;
+    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.id==='scriptEditor' || (t.classList && (t.classList.contains('imgcaption') || t.classList.contains('footnote-def-text'))))) lastFocusedEditable = t;
+  });
+  modal.querySelectorAll('[data-place-img]').forEach(btn=>{
+    btn.onclick = ()=>{
+      commitModalFields();
+      c.script = (c.script ? c.script.trim() + '\n\n' : '') + scriptImageTag(btn.dataset.placeImg) + '\n\n';
+      renderModal();
+      saveToGitHub();
+    };
+  });
+  modal.querySelectorAll('[data-drop-img]').forEach(btn=>{
+    btn.onclick = ()=>{ commitModalFields(); deleteImageEverywhere(c, btn.dataset.dropImg); renderModal(); saveToGitHub(); };
+  });
+  const genCaptions = document.getElementById('genCaptions');
+  if(genCaptions) genCaptions.onclick = ()=>{ commitModalFields(); generateCaptionVariants(c); renderModal(); };
+  const genSubstack = document.getElementById('genSubstack');
+  if(genSubstack) genSubstack.onclick = ()=>{ commitModalFields(); c.platforms.substack.draft = generateSubstackDraft(c); renderModal(); };
+  const copyTitleBtn = document.getElementById('copySubstackTitleBtn');
+  if(copyTitleBtn) copyTitleBtn.onclick = ()=>{ commitModalFields(); copyPlainTextToClipboard(c.title, 'Title'); };
+  const copySubtitleBtn = document.getElementById('copySubstackSubtitleBtn');
+  if(copySubtitleBtn) copySubtitleBtn.onclick = ()=>{ commitModalFields(); copyPlainTextToClipboard(c.subtitle, 'Subtitle'); };
+  const copyScriptBtn = document.getElementById('copySubstackScriptBtn');
+  if(copyScriptBtn) copyScriptBtn.onclick = ()=>{ commitModalFields(); copySubstackScript(c); };
+  const copyCoverBtn = document.getElementById('copySubstackCoverBtn');
+  if(copyCoverBtn) copyCoverBtn.onclick = ()=>{ if(c.coverImage) copyImageToClipboard(c.coverImage.path); };
+  const openSubstackTabBtn = document.getElementById('openSubstackTabBtn');
+  if(openSubstackTabBtn) openSubstackTabBtn.onclick = ()=> window.open(SUBSTACK_NEW_POST_URL, '_blank');
+
+  const postBlueskyBtn = document.getElementById('postBlueskyBtn');
+  const bskyVideoInput = document.getElementById('bskyVideoInput');
+  if(postBlueskyBtn && bskyVideoInput){
+    postBlueskyBtn.onclick = ()=>{ commitModalFields(); bskyVideoInput.click(); };
+    bskyVideoInput.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!file) return;
+      const statusEl = document.getElementById('bskyPostStatus');
+      postVideoToBluesky(c, file, statusEl);
+    };
+  }
+
+  const postYoutubeBtn = document.getElementById('postYoutubeBtn');
+  const ytVideoInput = document.getElementById('ytVideoInput');
+  const ytThumbInput = document.getElementById('ytThumbInput');
+  if(postYoutubeBtn && ytVideoInput && ytThumbInput){
+    postYoutubeBtn.onclick = ()=>{ commitModalFields(); ytVideoInput.click(); };
+    ytVideoInput.onchange = async (e)=>{
+      const videoFile = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!videoFile) return;
+      const statusEl = document.getElementById('ytPostStatus');
+      // Decide Shorts vs. regular up front so we know whether to pause here
+      // and ask for a thumbnail before doing anything else.
+      let meta;
+      try{
+        if(statusEl) statusEl.textContent = 'Checking video length…';
+        meta = await readVideoMeta(videoFile);
+        URL.revokeObjectURL(meta.url);
+      }catch(err){
+        if(statusEl) statusEl.textContent = err.message || "Couldn't read that video file.";
+        return;
+      }
+      const isShort = meta.duration > 0 && meta.duration < YT_SHORTS_MAX_SECONDS;
+      if(isShort){
+        postVideoToYouTube(c, videoFile, null, statusEl);
+      } else {
+        if(statusEl) statusEl.textContent = 'This is ' + Math.round(meta.duration) + 's, so it\'s a regular video — pick a horizontal thumbnail next.';
+        ytThumbInput.onchange = (e2)=>{
+          const thumbFile = e2.target.files && e2.target.files[0];
+          e2.target.value = '';
+          if(!thumbFile){ if(statusEl) statusEl.textContent = 'No thumbnail chosen — try again.'; return; }
+          postVideoToYouTube(c, videoFile, thumbFile, statusEl);
+        };
+        ytThumbInput.click();
+      }
+    };
+  }
+
+  const postInstagramBtn = document.getElementById('postInstagramBtn');
+  const igVideoInput = document.getElementById('igVideoInput');
+  if(postInstagramBtn && igVideoInput){
+    postInstagramBtn.onclick = ()=>{ commitModalFields(); igVideoInput.click(); };
+    igVideoInput.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!file) return;
+      const statusEl = document.getElementById('igPostStatus');
+      postVideoToInstagram(c, file, statusEl);
+    };
+  }
+
+  const baseCapEl2 = document.getElementById('baseCaption');
+  const baseCapCountEl = document.getElementById('baseCaptionCount');
+  if(baseCapEl2 && baseCapCountEl){
+    baseCapEl2.addEventListener('input', ()=>{
+      baseCapCountEl.textContent = baseCapEl2.value.length + ' characters';
+      // Live-sync: push the base caption out to every platform's caption box
+      // as you type, applying each platform's own hashtag/length rules —
+      // no need to click "Generate caption variants" separately anymore.
+      // This always overwrites each platform box (per Christopher's choice),
+      // so a manually hand-edited platform caption gets replaced the next
+      // time the base caption changes.
+      c.baseCaption = baseCapEl2.value;
+      generateCaptionVariants(c);
+      PLATFORMS.forEach(p=>{
+        if(p.isSubstack) return;
+        const ta = modal.querySelector('textarea[data-plat="'+p.key+'"][data-field="caption"]');
+        if(!ta) return;
+        ta.value = c.platforms[p.key].caption;
+        const row = ta.closest('.platform-row');
+        const cc = row ? row.querySelector('.charcount') : null;
+        if(cc){
+          cc.textContent = ta.value.length + (p.limit ? ' / '+p.limit : '');
+          cc.classList.toggle('over', !!(p.limit && ta.value.length>p.limit));
+        }
+      });
+    });
+  }
+
+  modal.querySelectorAll('textarea[data-plat]').forEach(ta=>{
+    ta.addEventListener('input', ()=>{
+      const row = ta.closest('.platform-row');
+      const cc = row.querySelector('.charcount');
+      if(cc){
+        const limit = PLATFORMS.find(p=>p.key===ta.dataset.plat).limit;
+        cc.textContent = ta.value.length + (limit ? ' / '+limit : '');
+        cc.classList.toggle('over', !!(limit && ta.value.length>limit));
+      }
+    });
+  });
+}
+
+function commitModalFields(){
+  const c = getCard();
+  if(!c) return;
+  c.title = document.getElementById('titleInput').value || 'Untitled idea';
+  const subtitleEl = document.getElementById('subtitleInput');
+  if(subtitleEl) c.subtitle = subtitleEl.value;
+  c.stage = document.getElementById('stageInput').value;
+  c.tags = document.getElementById('tagsInput').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const editorEl = document.getElementById('scriptEditor');
+  if(editorEl) c.script = serializeScriptEditor(editorEl);
+
+  const baseCapEl = document.getElementById('baseCaption');
+  if(baseCapEl) c.baseCaption = baseCapEl.value;
+
+  document.querySelectorAll('[data-plat]').forEach(el=>{
+    const key = el.dataset.plat, field = el.dataset.field;
+    if(c.platforms[key]) c.platforms[key][field] = el.value;
+  });
+}
+
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id === 'overlay-el') closeModal();
+});
+
+igCheckForOAuthRedirect(); // must run before initSync's forced-Settings-open check below, so a fresh Instagram redirect always gets handled
+igMaybeRefreshToken(); // best-effort, fire-and-forget -- never blocks app startup
+initSync();
+</script>
+
+</body>
+</html>

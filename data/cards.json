@@ -7,9 +7,13 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "Gas prices are fairly correlated with US presidential approval ratings. \n\nSo one would think any president would work towards lowering energy prices. \n\nExcept when weird partisan culture wars get in the way.\n\nThis time it's about the engine start stop feature.\n\nFor years, we've seen improvements in miles per gallon, why would a president walk us backwards?\n\n![](data/images/cxdqgqky-1791736171899-41p6.png)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cxdqgqky-1791736171899-41p6.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

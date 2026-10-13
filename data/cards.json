@@ -14,7 +14,9 @@
           "path": "data/images/cxdqgqky-1791736171899-41p6.png"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/cxdqgqky-cover-1791872147063-pc5x.jpg"
+      },
       "baseCaption": "Ironic that 3 weeks before launching the attacks on Iran that lead to higher gas prices, the White House removed an incentive that increases MPG and lowers pollution for pedestrians and our cities. That is, the Start Stop feature. Apparently it's \"the universally hated\" but I couldn't find any survey saying so.\n\n#gas #affordable #economy #economics #inflation ",
       "platforms": {
         "tiktok": {

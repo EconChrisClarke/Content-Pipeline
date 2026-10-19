@@ -7,12 +7,9 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "https://fred.stlouisfed.org/graph/?g=1ZKVB\n\n![](data/images/cvyzx1se-1792390692278-8qkx.jpg)\n\n![](data/images/cvyzx1se-1792391576537-dp10.jpg)",
+      "script": "https://fred.stlouisfed.org/graph/?g=1ZKVB\n\n![](data/images/cvyzx1se-1792391576537-dp10.jpg)",
       "sources": [],
       "images": [
-        {
-          "path": "data/images/cvyzx1se-1792390692278-8qkx.jpg"
-        },
         {
           "path": "data/images/cvyzx1se-1792391576537-dp10.jpg"
         }

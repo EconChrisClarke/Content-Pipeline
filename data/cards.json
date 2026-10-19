@@ -7,9 +7,13 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "https://fred.stlouisfed.org/graph/?g=1ZKVB\n\n![](data/images/cvyzx1se-1792390692278-8qkx.jpg)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cvyzx1se-1792390692278-8qkx.jpg"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

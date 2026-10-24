@@ -7,11 +7,14 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "But spending\n\nBig debt\n\n![](data/images/c7j9pi1z-1792863775785-8bbw.jpg)",
+      "script": "But spending\n\nBig debt\n\n![[OurWorld in Data](https://ourworldindata.org/grapher/historical-gov-spending-gdp?tab=line&time=1980..latest&country=FRA~GBR~SWE~DEU~USA&mapSelect=~FRA)](data/images/c7j9pi1z-1792863775785-8bbw.jpg)\n\nBig Taxes\n\n![](data/images/c7j9pi1z-1792863887278-newz.jpg)",
       "sources": [],
       "images": [
         {
           "path": "data/images/c7j9pi1z-1792863775785-8bbw.jpg"
+        },
+        {
+          "path": "data/images/c7j9pi1z-1792863887278-newz.jpg"
         }
       ],
       "coverImage": null,

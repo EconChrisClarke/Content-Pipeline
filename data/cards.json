@@ -7,9 +7,13 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "French soccer player Kylian Mbappé recently referred to Mao as a \"dictator\", resulting in a social media outrage from China and his subsequent apology.\n\nSince then folks have \n\n![](data/images/cub1i72g-1793298282690-96d0.png)",
       "sources": [],
-      "images": [],
+      "images": [
+        {
+          "path": "data/images/cub1i72g-1793298282690-96d0.png"
+        }
+      ],
       "coverImage": null,
       "baseCaption": "",
       "platforms": {

@@ -17,9 +17,9 @@
         "Economy",
         "Economics"
       ],
-      "stage": "distributing",
+      "stage": "scripted",
       "dead": false,
-      "script": "Can the French Riots Teach Us How to Finally Tax the Rich?\n\nI'm no expert in the nuances of [French rioting](https://en.wikipedia.org/wiki/List_of_incidents_of_civil_unrest_in_France), but it seems, this year, they're more severe than normal.\n\nAre these violent street protests genuinely scaring the rich into fiscal submission?\n\nFirst, we need to understand the French government situation.\n\nTheir interest rates are rising. But - so are the interest rates in the rest of the world.\n\n![[Interactive Version](https://econchrisclarke.github.io/Claude-Scratch/sovereign-10y-yields-france-us-uk-germany.html)](data/images/c7j9pi1z-1792955414044-x7f1.png)\n\nWhile there are a variety of theories behind this (sustained long-term inflation or A.I. investment crowding out), France is giving alarm bells. The market no longer believes France will solve their debt problems and suddenly demands a higher default insurance risk premium.\n\n![[Interactive Version](https://econchrisclarke.github.io/Claude-Scratch/sovereign-cds-france-us-uk-germany.html)](data/images/c7j9pi1z-1792955739550-gm6y.png)\n\nSo, why can't they simply increase taxes on the rich?\n\nWell, this is France. They have.\n\nThere have been many attempts. In 2012, for example, the socialist president Hollande raised the marginal tax rate for both dividend and interest income from a flat 30ish% to a progressive rate that reached over 60% of interest income for the wealthiest.\n\n![Figure 1 : Evolution of Marginal Tax rates on Dividends and interest as a function of the marginal Personal Income Tax (PIT) rate from [Lefebvre, Lehmann, & Sicsic (2024)](https://onlinelibrary.wiley.com/doi/epdf/10.1111/sjoe.12578)](data/images/c7j9pi1z-1792956869500-ijh5.jpg)\n\nA [recent paper](https://onlinelibrary.wiley.com/doi/epdf/10.1111/sjoe.12578) from the Scandinavian Journal of Economics found a rate closer to  45% maximizes revenues. Raising rates will probably lead to more distortions than revenues. France is already around the peak a country can successfully tax the rich.\n\nWe can see this more broadly. Compared with other rich nations, France has the highest tax revenue as a share of GDP - around that 45% mark. You can see Sweden used to be a little closer to 50%, but is now below France.\n\n![[Our World In Data](https://ourworldindata.org/grapher/tax-revenues-as-a-share-of-gdp-unu-wider?tab=line&country=USA~FRA~GBR~SWE~DEU)](data/images/c7j9pi1z-1792863887278-newz.jpg)\n\nWell, if France is reaching the limits of taxes, and if they're borrowing costs are too high, perhaps they'll eventually cut spending.\n\nIndeed, France spends 57% of GDP. This is significantly higher than other peer nations. There certainly is room to cut. But there's just one problem.\n\n![[Our World in Data](https://ourworldindata.org/grapher/historical-gov-spending-gdp?tab=line&time=1980..latest&country=FRA~GBR~SWE~DEU~USA&mapSelect=~FRA)](data/images/c7j9pi1z-1792863775785-8bbw.jpg)\n\nThe vast majority of this spending goes towards [social services](https://ourworldindata.org/grapher/social-expenditure-as-percentage-of-gdp?country=~FRA), such as old-age pensions and healthcare.\n\nBy the way - France's situation isn't really a lesson for the U.S., yet. Our government spending is below our peer countries, and our tax share is far below!\n\nWith growing military threats around the world, Putin's imperialism just next door, and mounting fiscal interest rates - France must make a difficult decision - a decision the electorate does not want.\n\nMacron attempted to raise the retirement age from 62 to 64, but couldn't. Today, French presidential candidates are promising to lower it to 60! Maybe we really should be a little more like Scandinavian economies. Denmark just [raised ](https://www.bbc.com/news/articles/cvg71v533q6o)their retirement age to 70. There is a reason their debt ratio is [a third](https://tradingeconomics.com/country-list/government-debt-to-gdp) the size of France.",
+      "script": "Can the French Riots Teach Us How to Finally Tax the Rich?\n\nI'm no expert in the nuances of [French rioting](https://en.wikipedia.org/wiki/List_of_incidents_of_civil_unrest_in_France), but it seems, this year, they're more severe than normal.\n\nAre these violent street protests genuinely scaring the rich into fiscal submission?\n\nFirst, we need to understand the French government situation.\n\nTheir interest rates are rising. But - so are the interest rates in the rest of the world.\n\n![[Interactive Version](https://econchrisclarke.github.io/Claude-Scratch/sovereign-10y-yields-france-us-uk-germany.html)](data/images/c7j9pi1z-1792955414044-x7f1.png)\n\nWhile there are a variety of theories behind this (sustained long-term inflation or A.I. investment crowding out), France is giving alarm bells. The market no longer believes France will solve their debt problems and suddenly demands a higher default insurance risk premium.\n\n![[Interactive Version](https://econchrisclarke.github.io/Claude-Scratch/sovereign-cds-france-us-uk-germany.html)](data/images/c7j9pi1z-1792955739550-gm6y.png)\n\nSo, why can't they simply increase taxes on the rich?\n\nWell, this is France. They have.\n\nThere have been many attempts. In 2012, for example, the socialist president Hollande raised the marginal tax rate for both dividend and interest income from a flat 30ish% to a progressive rate that reached over 60% of interest income for the wealthiest.\n\n![Figure 1 : Evolution of Marginal Tax rates on Dividends and interest as a function of the marginal Personal Income Tax (PIT) rate from [Lefebvre, Lehmann, & Sicsic (2024)](https://onlinelibrary.wiley.com/doi/epdf/10.1111/sjoe.12578)](data/images/c7j9pi1z-1792956869500-ijh5.jpg)\n\nA [recent paper](https://onlinelibrary.wiley.com/doi/epdf/10.1111/sjoe.12578) from the Scandinavian Journal of Economics found a rate closer to  45% maximizes revenues. Raising rates will probably lead to more distortions than revenues. France has already around the peak a country can successfully tax the rich.\n\nWe can see this more broadly. Compared with other rich nations, France has the highest tax revenue as a share of GDP - around that 45% mark. You can see Sweden used to be a little closer to 50%, but is now below France.\n\n![[Our World In Data](https://ourworldindata.org/grapher/tax-revenues-as-a-share-of-gdp-unu-wider?tab=line&country=USA~FRA~GBR~SWE~DEU)](data/images/c7j9pi1z-1792863887278-newz.jpg)\n\nWell, if France is reaching the limits of taxes, and if they're borrowing costs are too high, perhaps they'll eventually cut spending.\n\nIndeed, France spends 57% of GDP. This is significantly higher than other peer nations. There certainly is room to cut. But there's just one problem.\n\n![[Our World in Data](https://ourworldindata.org/grapher/historical-gov-spending-gdp?tab=line&time=1980..latest&country=FRA~GBR~SWE~DEU~USA&mapSelect=~FRA)](data/images/c7j9pi1z-1792863775785-8bbw.jpg)\n\nThe vast majority of this spending goes towards [social services](https://ourworldindata.org/grapher/social-expenditure-as-percentage-of-gdp?country=~FRA), such as old-age pensions and healthcare.\n\nBy the way - France's situation isn't really a lesson for the U.S., yet. Our government spending is below our peer countries, and our tax share is far below!\n\nWith growing military threats around the world, Putin's imperialism just next door, and mounting fiscal interest rates - France must make a difficult decision - a decision the electorate does not want.\n\nMacron attempted to raise the retirement age from 62 to 64, but couldn't. Today, French presidential candidates are promising to lower it to 60! Maybe we really should be a little more like Scandinavian economies. Denmark just [raised ](https://www.bbc.com/news/articles/cvg71v533q6o)their retirement age to 70. There is a reason their debt ratio is [a third](https://tradingeconomics.com/country-list/government-debt-to-gdp) the size of France.",
       "sources": [],
       "images": [
         {
@@ -341,11 +341,14 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "![](data/images/cy20qojr-1790058839313-v18j.png)",
+      "script": "![](data/images/cy20qojr-1790058839313-v18j.png)\n\n![](data/images/cy20qojr-1793255663117-cppe.jpg)\n\nhttps://www.project-syndicate.org/commentary/china-eroding-fiscal-position-political-purges-economic-weakness-by-navneeraj-sharma-and-arvind-subramanian-2026-10",
       "sources": [],
       "images": [
         {
           "path": "data/images/cy20qojr-1790058839313-v18j.png"
+        },
+        {
+          "path": "data/images/cy20qojr-1793255663117-cppe.jpg"
         }
       ],
       "coverImage": null,
@@ -544,9 +547,9 @@
           "link": ""
         },
         "instagram": {
-          "status": "posted",
+          "status": "not_started",
           "caption": "Do poor families get $181k from the government? No. Government support also goes to those struggling who are above the \"official\" poverty line. Balancing the budget on the backs of the more vulnerable among us is plain wicked, in my opinion.\n\n#budget #economy #government #money #economics ",
-          "link": "https://www.instagram.com/reel/DfDmyoujJur/"
+          "link": ""
         },
         "x": {
           "status": "not_started",
@@ -554,9 +557,9 @@
           "link": ""
         },
         "youtube": {
-          "status": "posted",
+          "status": "not_started",
           "caption": "Do poor families get $181k from the government? No. Government support also goes to those struggling who are above the \"official\" poverty line. Balancing the budget on the backs of the more vulnerable among us is plain wicked, in my opinion.\n\n#budget #economy #government #money #economics ",
-          "link": "https://www.youtube.com/shorts/fXWUsZHx3hQ",
+          "link": "",
           "title": ""
         },
         "bsky": {

@@ -1096,11 +1096,17 @@
     },
     {
       "id": "cb3a3m2z",
-      "title": "Logging",
-      "tags": [],
+      "title": "How Do We Still Have Trees, When We Cut Them Down Faster Than Ever?",
+      "tags": [
+        "environment",
+        "forest",
+        "lumber",
+        "economy",
+        "economics"
+      ],
       "stage": "capture",
       "dead": false,
-      "script": "",
+      "script": "How do we still have any trees?",
       "sources": [],
       "images": [],
       "baseCaption": "",
@@ -1142,7 +1148,8 @@
           "link": ""
         }
       },
-      "createdAt": "2026-08-28"
+      "createdAt": "2026-08-28",
+      "subtitle": "Keynote at the FSC"
     },
     {
       "id": "ch769j7u",

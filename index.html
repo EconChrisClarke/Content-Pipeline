@@ -3520,6 +3520,17 @@ function deleteImageEverywhere(card, path){
   }
 }
 
+// renderModal() rebuilds every field from the card object, so anything typed
+// since the last commit (title, subtitle, script…) has to be pulled out of the
+// on-screen fields first or it's wiped. For async steps like a cover upload,
+// the user may also have closed this card or opened another one while waiting;
+// in that case there's nothing of this card's on screen to keep or redraw.
+function refreshModalKeepingEdits(card){
+  if(openCardId !== card.id) return;
+  commitModalFields();
+  renderModal();
+}
+
 // The cover image is a separate single slot from the inline script images —
 // it's the thumbnail Substack (and eventually other platforms) shows for the
 // post, not a paragraph inside the script itself. Uploaded the same way as
@@ -3541,7 +3552,7 @@ async function setCoverImage(card, file){
     await ghPutBinaryFile(path, base64, 'Set cover image for card ' + card.id);
     card.coverImage = {path};
     if(statusEl) statusEl.textContent = '';
-    renderModal();
+    refreshModalKeepingEdits(card);
     saveToGitHub();
     if(oldPath){
       ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Replace cover image for card ' + card.id); }).catch(()=>{});
@@ -3554,7 +3565,7 @@ async function setCoverImage(card, file){
 function removeCoverImage(card){
   const oldPath = card.coverImage ? card.coverImage.path : null;
   card.coverImage = null;
-  renderModal();
+  refreshModalKeepingEdits(card);
   saveToGitHub();
   if(oldPath && syncEnabled){
     ghGetFile(oldPath).then(f=>{ if(f) ghDeleteFile(oldPath, f.sha, 'Remove cover image for card ' + card.id); }).catch(()=>{});

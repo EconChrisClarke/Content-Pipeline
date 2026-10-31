@@ -256,16 +256,14 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "https://fred.stlouisfed.org/graph/?g=1ZKVB\n\n![](data/images/cvyzx1se-1792391576537-dp10.jpg)\n\nTesting to See If This works since the bug is fixed",
+      "script": "https://fred.stlouisfed.org/graph/?g=1ZKVB\n\n![](data/images/cvyzx1se-1792391576537-dp10.jpg)",
       "sources": [],
       "images": [
         {
           "path": "data/images/cvyzx1se-1792391576537-dp10.jpg"
         }
       ],
-      "coverImage": {
-        "path": "data/images/cvyzx1se-cover-1793476624551-e1qn.jpg"
-      },
+      "coverImage": null,
       "baseCaption": "",
       "platforms": {
         "tiktok": {

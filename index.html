@@ -2319,6 +2319,67 @@ function removeImageFromScript(script, path){
   const re = new RegExp('\\n*!\\[[\\s\\S]*?\\]\\('+esc+'\\)(?:\\{(?:sm|md|lg)\\})?\\n*','g');
   return script.replace(re, '\n\n').replace(/\n{3,}/g,'\n\n').trim();
 }
+// Paths of the images placed in a script, in the order they appear (each
+// image is its own block, separated from its neighbors by a blank line).
+function scriptImagePaths(script){
+  const seen = new Set(), paths = [];
+  (script || '').split(/\n\s*\n/).forEach(block=>{
+    const path = imageLinePath(block);
+    if(path && !seen.has(path)){ seen.add(path); paths.push(path); }
+  });
+  return paths;
+}
+
+// ---- "Download all images" (for recording on the phone) ----
+// Saves every image placed in the card's script to this device, in script
+// order, named after the card (why-do-we-have-stock-markets-01.png, -02, …)
+// so they sort in Downloads the way they appear in the script. Images
+// uploaded but never placed in the script, and the cover image, are skipped.
+async function fetchCardImageBlob(path){
+  const urls = [];
+  if(localImageBlobs.has(path)) urls.push(localImageBlobs.get(path)); // uploaded on this device this session
+  if(ghConfig) urls.push('https://raw.githubusercontent.com/' + ghConfig.owner + '/' + ghConfig.repo + '/' + ghConfig.branch + '/' + path); // live as soon as it's committed
+  urls.push(path); // GitHub Pages copy (can lag a minute behind a fresh upload)
+  for(const u of urls){
+    try{
+      const res = await fetch(u);
+      if(res.ok) return await res.blob();
+    }catch(e){}
+  }
+  throw new Error('Could not fetch ' + path);
+}
+
+async function downloadAllScriptImages(card){
+  const say = (text)=>{ const el = document.getElementById('dlImagesStatus'); if(el) el.textContent = text; };
+  const setBusy = (busy)=>{ const b = document.getElementById('dlImagesBtn'); if(b) b.disabled = busy; };
+  commitModalFields(); // include images placed since the card was opened
+  const paths = scriptImagePaths(card.script);
+  if(!paths.length){ say('This script has no images yet.'); return; }
+  setBusy(true);
+  const base = giSlug((card.title || '').replace(/['’]/g, '')); // "Shouldn't" → shouldnt, not shouldn-t
+  const digits = Math.max(2, String(paths.length).length);
+  const files = [], failed = [];
+  for(let i = 0; i < paths.length; i++){
+    say('Fetching image ' + (i + 1) + ' of ' + paths.length + '…');
+    try{
+      const blob = await fetchCardImageBlob(paths[i]);
+      files.push({blob, name: base + '-' + String(i + 1).padStart(digits, '0') + '.' + safeExt(paths[i])});
+    }catch(e){
+      failed.push(i + 1);
+    }
+  }
+  if(files.length){
+    say('Saving ' + files.length + ' image' + (files.length === 1 ? '' : 's') + '… If your browser asks about downloading multiple files, tap Allow.');
+    await giDownloadVerticals(files); // same one-file-at-a-time download the graph import uses
+  }
+  let msg = files.length
+    ? 'Saved ' + files.length + ' image' + (files.length === 1 ? '' : 's') + ' to Downloads as ' + base + '-' + '01'.padStart(digits, '0') + '…'
+    : 'No images could be downloaded.';
+  if(failed.length) msg += ' Couldn\'t fetch image' + (failed.length === 1 ? ' ' : 's ') + failed.join(', ') + ' — check your connection and try again.';
+  say(msg);
+  setBusy(false);
+}
+
 function orphanedImages(card){
   const text = card.script || '';
   return (card.images||[]).filter(img=>img.path && !text.includes(']('+img.path+')'));
@@ -3819,6 +3880,8 @@ function renderModal(){
       '<div class="note">Right-click text (or long-press on mobile) for formatting — bold/italic/underline, links, paragraph style — and to add a footnote. Right-click with nothing selected for just paragraph style / footnote.</div>' +
     '</div>' +
     platformsHtml +
+    '<div class="field" style="margin-top:18px;"><button class="small-btn" type="button" id="dlImagesBtn">⬇ Download all images</button>' +
+      '<div class="note" id="dlImagesStatus">Saves every image in the script to this device, numbered in script order.</div></div>' +
     '<div class="modal-actions">' +
       '<div class="left"><button class="ghost" id="markDead">'+(c.dead ? 'Restore from archive' : "Mark: didn't pan out")+'</button>' +
       '<button class="ghost" id="deleteCard" style="color:#a3402f;border-color:#a3402f;">Delete</button></div>' +
@@ -3827,6 +3890,7 @@ function renderModal(){
 
   document.getElementById('stageInput').onchange = ()=>{ commitModalFields(); renderModal(); };
   document.getElementById('closeModalBtn').onclick = closeModal;
+  document.getElementById('dlImagesBtn').onclick = ()=> downloadAllScriptImages(c);
   document.getElementById('saveModal').onclick = ()=>{ commitModalFields(); closeModal(); saveToGitHub(); };
   document.getElementById('markDead').onclick = ()=>{ commitModalFields(); c.dead = !c.dead; renderModal(); saveToGitHub(); };
   document.getElementById('deleteCard').onclick = ()=>{

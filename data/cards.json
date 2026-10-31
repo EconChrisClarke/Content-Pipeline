@@ -263,7 +263,9 @@
           "path": "data/images/cvyzx1se-1792391576537-dp10.jpg"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/cvyzx1se-cover-1793476584222-59z8.jpg"
+      },
       "baseCaption": "",
       "platforms": {
         "tiktok": {

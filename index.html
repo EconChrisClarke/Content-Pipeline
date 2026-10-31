@@ -736,14 +736,39 @@ async function loadFromGitHub(){
   render();
 }
 
-async function saveToGitHub(){
+// Saves run one at a time. If two overlapped (say an image upload's save and
+// an autosave a moment later), the older one could finish last and overwrite
+// the newer one in cards.json. So while a save is talking to GitHub, any
+// further requests share one follow-up save that starts when it finishes —
+// built from state at that moment, so it carries every change made meanwhile.
+let saveRunning = null;      // promise for the save currently in progress
+let saveQueued = null;       // promise for the single follow-up save, if any
+let lastSavedPayload = null; // exact cards.json text of the last successful save
+
+function saveToGitHub(){
   saveFallbackCards(state.cards);
-  if(!syncEnabled || !ghConfig){ render(); return; }
-  setSyncStatus('', 'Saving…');
+  if(!syncEnabled || !ghConfig){ render(); return Promise.resolve(false); }
+  if(!saveRunning){
+    saveRunning = saveToGitHubNow().finally(()=>{ saveRunning = null; });
+    return saveRunning;
+  }
+  render();
+  if(!saveQueued){
+    saveQueued = saveRunning.then(()=>{ saveQueued = null; return saveToGitHub(); });
+  }
+  return saveQueued;
+}
+
+// Resolves true if GitHub now holds the current cards, false if the save failed.
+async function saveToGitHubNow(){
   const payload = JSON.stringify({cards: state.cards}, null, 2);
+  if(payload === lastSavedPayload){ render(); return true; } // nothing changed since the last save — skip the extra commit
+  setSyncStatus('', 'Saving…');
+  let ok = false;
   try{
     const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
     cardsSha = result.content.sha;
+    ok = true;
     setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + ' — open this same page on any device to see the same board.');
   }catch(err){
     if(err.code === 'conflict'){
@@ -754,6 +779,7 @@ async function saveToGitHub(){
         cardsSha = file ? file.sha : null;
         const result = await ghPutFile(DATA_PATH, payload, 'Update cards.json', cardsSha);
         cardsSha = result.content.sha;
+        ok = true;
         setSyncStatus('ok', 'Synced with ' + ghConfig.owner + '/' + ghConfig.repo + '.');
       }catch(err2){
         setSyncStatus('bad', "Couldn't save after a conflict — your change is kept locally, try again in a moment.");
@@ -764,7 +790,9 @@ async function saveToGitHub(){
       setSyncStatus('bad', "Couldn't reach GitHub — your change is kept locally and will sync on your next edit.");
     }
   }
+  if(ok) lastSavedPayload = payload;
   render();
+  return ok;
 }
 
 // Reconnecting (e.g. re-opening Settings and hitting Connect) must never
@@ -1518,16 +1546,71 @@ document.getElementById('graphImportOverlay').addEventListener('click', e=>{ if(
 // ---- modal / card detail ----
 
 function openModal(id){
+  if(openCardId && openCardId !== id) autosaveOpenCard(); // switching straight from another card: keep its edits
   openCardId = id;
   const c = getCard();
   if(c && migrateLegacySourcesToFootnotes(c)) saveToGitHub();
   renderModal();
   document.getElementById('overlay-el').classList.add('open');
+  startAutosave();
 }
 function closeModal(){
+  autosaveOpenCard(); // anything typed since the last autosave
+  stopAutosave();
   document.getElementById('overlay-el').classList.remove('open');
   openCardId = null;
   render();
+}
+
+// ---- autosave ----
+// While a card is open, what's been typed into it is saved every 60 seconds,
+// so a crash, a stray click or a redraw bug costs at most a minute of
+// writing. A tick only saves if something was typed or changed in the card
+// since the previous one, so an idle open card doesn't add a commit a minute.
+// Closing the card, or switching away from the tab/app, saves straight away.
+const AUTOSAVE_MS = 60 * 1000;
+let autosaveTimer = null;
+let modalEdited = false;     // set by any typing or change inside the open card
+let lastAutosave = null;     // {cardId, at} — shown as "Autosaved 1:02 PM" in the card
+
+function markModalEdited(e){
+  const modal = document.getElementById('modal-el');
+  if(openCardId && modal && e.target && modal.contains(e.target)) modalEdited = true;
+}
+document.addEventListener('input', markModalEdited, true);
+document.addEventListener('change', markModalEdited, true);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden') autosaveOpenCard();
+});
+
+function startAutosave(){
+  stopAutosave();
+  modalEdited = false;
+  autosaveTimer = setInterval(autosaveOpenCard, AUTOSAVE_MS);
+}
+function stopAutosave(){
+  if(autosaveTimer){ clearInterval(autosaveTimer); autosaveTimer = null; }
+}
+
+function autosaveOpenCard(){
+  if(!modalEdited || !getCard()) return;
+  modalEdited = false;
+  const cardId = openCardId;
+  commitModalFields();
+  saveToGitHub().then(ok=>{
+    if(!ok) return;
+    lastAutosave = {cardId, at: new Date()};
+    showAutosaveNote();
+  });
+}
+
+function autosaveNoteText(){
+  if(!lastAutosave || lastAutosave.cardId !== openCardId) return '';
+  return 'Autosaved ' + lastAutosave.at.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+function showAutosaveNote(){
+  const el = document.getElementById('autosaveNote');
+  if(el) el.textContent = autosaveNoteText();
 }
 function getCard(){ return state.cards.find(c=>c.id===openCardId); }
 
@@ -3739,7 +3822,7 @@ function renderModal(){
     '<div class="modal-actions">' +
       '<div class="left"><button class="ghost" id="markDead">'+(c.dead ? 'Restore from archive' : "Mark: didn't pan out")+'</button>' +
       '<button class="ghost" id="deleteCard" style="color:#a3402f;border-color:#a3402f;">Delete</button></div>' +
-      '<div><button class="ghost" id="closeModalBtn">Close</button><button class="primary" id="saveModal">Save</button></div>' +
+      '<div><span class="note" id="autosaveNote" style="margin-right:10px;">'+escapeHtml(autosaveNoteText())+'</span><button class="ghost" id="closeModalBtn">Close</button><button class="primary" id="saveModal">Save</button></div>' +
     '</div>';
 
   document.getElementById('stageInput').onchange = ()=>{ commitModalFields(); renderModal(); };

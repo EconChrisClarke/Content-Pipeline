@@ -1249,30 +1249,80 @@ let graphImport = null;             // {step, repos, repo, graphs, log, vertical
 
 function giOwner(){ return (ghConfig && ghConfig.owner) || 'EconChrisClarke'; }
 
-// Finds the first markdown table in a README whose header has a "Live page"
-// column, and returns one {n, title, url} per row, in table order.
+// Finds the chart pages a repo's README lists and returns one {n, title, url}
+// per chart, in README order. Two layouts are recognized:
+//  1. A markdown table with a column of links to the chart pages: the column
+//     headed "Live page" if there is one, otherwise whichever column has the
+//     most links to this account's GitHub Pages site (e.g. one headed "Link").
+//     The title comes from a Chart/Graph/Map/Title/Figure column, or else the
+//     first other column.
+//  2. Failing that, a bulleted or numbered list whose items link to chart
+//     pages, e.g. "- **[Ideological leaning by source](https://…html)** — …";
+//     the link text is the title.
+// Outside a "Live page" column, only links to <owner>.github.io pages count,
+// so links in a sources table or a write-up aren't mistaken for charts.
+function chartPageUrl(text, ownSiteOnly){
+  const s = String(text || '');
+  const m = /\]\((https?:\/\/[^)\s]+\.html)\)/.exec(s) || /(https?:\/\/[^\s)<>|]+\.html)/.exec(s);
+  if(!m) return null;
+  if(ownSiteOnly){
+    let host = '';
+    try{ host = new URL(m[1]).hostname.toLowerCase(); }catch(e){ return null; }
+    if(host !== String(giOwner()).toLowerCase() + '.github.io') return null;
+  }
+  return m[1];
+}
+
 function parseGraphTable(readme){
   const lines = String(readme || '').split('\n');
+  const isRow = l => /^\s*\|/.test(l);
   const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(s=>s.trim());
+  const isDivider = r => r.every(c=>/^:?-{2,}:?$/.test(c) || c === '');
+  const plain = s => String(s || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').trim();
+
+  // 1. A table with a column of chart-page links
   for(let i = 0; i < lines.length; i++){
-    if(!/^\s*\|/.test(lines[i])) continue;
+    if(!isRow(lines[i])) continue;
     const head = cells(lines[i]).map(h=>h.toLowerCase());
-    const liveIdx = head.findIndex(h=>h.includes('live page'));
-    if(liveIdx === -1) continue;
-    let titleIdx = head.findIndex(h=>/^(chart|graph|map|title|figure)s?$/.test(h));
-    if(titleIdx === -1) titleIdx = head.findIndex((h, k)=>k !== liveIdx && h !== '#' && h !== '');
-    const rows = [];
-    for(let j = i + 1; j < lines.length && /^\s*\|/.test(lines[j]); j++){
+    const body = [];
+    let j = i + 1;
+    for(; j < lines.length && isRow(lines[j]); j++){
       const r = cells(lines[j]);
-      if(r.every(c=>/^:?-{2,}:?$/.test(c) || c === '')) continue; // the |---|---| divider row
-      const m = /\]\((https?:\/\/[^)\s]+\.html)\)/.exec(r[liveIdx] || '') || /(https?:\/\/\S+\.html)/.exec(r[liveIdx] || '');
-      if(!m) continue;
-      const title = (r[titleIdx] || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').trim();
-      rows.push({n: rows.length + 1, title: title || m[1].split('/').pop(), url: m[1]});
+      if(!isDivider(r)) body.push(r);
     }
+    i = j - 1; // the next search starts after this table
+    let linkIdx = head.findIndex(h=>h.includes('live page'));
+    const ownSiteOnly = linkIdx === -1;
+    if(ownSiteOnly){
+      let best = 0;
+      head.forEach((_, k)=>{
+        const n = body.filter(r=>chartPageUrl(r[k], true)).length;
+        if(n > best){ best = n; linkIdx = k; }
+      });
+    }
+    if(linkIdx === -1) continue;
+    let titleIdx = head.findIndex((h, k)=>k !== linkIdx && /^(chart|graph|map|title|figure)s?$/.test(h));
+    if(titleIdx === -1) titleIdx = head.findIndex((h, k)=>k !== linkIdx && h !== '#' && h !== '');
+    const rows = [];
+    body.forEach(r=>{
+      const url = chartPageUrl(r[linkIdx], ownSiteOnly);
+      if(url) rows.push({n: rows.length + 1, title: plain(r[titleIdx]) || url.split('/').pop(), url});
+    });
     if(rows.length) return rows;
   }
-  return [];
+
+  // 2. A bulleted or numbered list of chart-page links
+  const rows = [], seen = new Set();
+  lines.forEach(l=>{
+    if(!/^\s*(?:[-*+]|\d+[.)])\s+/.test(l)) return;
+    const m = /\[([^\]]+)\]\((https?:\/\/[^)\s]+\.html)\)/.exec(l);
+    if(!m || seen.has(m[2]) || !chartPageUrl('](' + m[2] + ')', true)) return;
+    seen.add(m[2]);
+    let title = plain(m[1]);
+    if(!title || /\.html$/i.test(title) || /^https?:/i.test(title)) title = m[2].split('/').pop();
+    rows.push({n: rows.length + 1, title, url: m[2]});
+  });
+  return rows;
 }
 
 async function giFetchRecentChartRepos(){
@@ -1401,7 +1451,7 @@ function renderGraphImport(){
     } else if(!g.repos){
       body.innerHTML = '<p class="gi-note">Looking up your most recently updated chart repositories&hellip;</p>';
     } else if(!g.repos.length){
-      body.innerHTML = '<p class="gi-note">None of your recent repositories has a README table with a &ldquo;Live page&rdquo; column, so there are no graphs to import.</p>';
+      body.innerHTML = '<p class="gi-note">None of your recent repositories has a README that links to chart pages on your GitHub Pages site, so there are no graphs to import.</p>';
     } else {
       const list = document.createElement('div'); list.className = 'gi-repos';
       g.repos.forEach(r=>{

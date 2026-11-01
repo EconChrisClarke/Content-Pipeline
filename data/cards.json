@@ -1284,11 +1284,19 @@
     },
     {
       "id": "ct3kngp4",
-      "title": "Billionaire Frequency, Poverty, & Democracy",
-      "tags": [],
+      "title": "Billionaires and Poverty",
+      "tags": [
+        "inequality",
+        "poverty",
+        "billionaires",
+        "economy",
+        "economics",
+        "money",
+        "capitalism"
+      ],
       "stage": "capture",
       "dead": false,
-      "script": "Should we get rid of billionaires? \n\nI don't know, but maybe we should look at the type of countries that don't have them. What are they like?",
+      "script": "Should we get rid of billionaires?\n\nI don't know, but maybe we should look at the type of countries that don't have them. What are they like?",
       "sources": [],
       "images": [],
       "baseCaption": "",
@@ -1330,7 +1338,8 @@
           "link": ""
         }
       },
-      "createdAt": "2026-08-28"
+      "createdAt": "2026-08-28",
+      "subtitle": "Eat the Rich?"
     },
     {
       "id": "ciwg4e7t",

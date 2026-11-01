@@ -7,11 +7,14 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "Capitalism is really hard to talk about. But if I go to an encyclopedia, I want to hear a balanced presentation. \n\nIndeed, the Stanford Encyclopedia of Philosophy has long been a favorite of mine. Unfortunately, they recently published a new article on \"Capitalism\" that's extremely biased. Folks have tried to defend it. Here is my attempt to objectively show its bias.\n\nLanguage can be parsed into neutral, supporting, or critical statements. LLM's are very good at that. Now, LLMs can be tricky, so I uploaded every single sentence in an[ excel spreadsheet](https://github.com/EconChrisClarke/capitalism-encyclopedia-bias/blob/master/Capitalism_Encyclopedias_Full_Workbook.xlsx) and reviewed the judgement. Everything I saw was perfectly reasonable.\n\n![](data/images/c1f4nw6v-1793494666587-6khr.png)\n\nWikipedia continues to stand out as one of the best encyclopedias out there. The new Stanford Encyclopedia of Philosophy entry for 'Capitalism' devotes 20% more of their words to the critical perspective than they do the supportive view. More in the",
+      "script": "Capitalism is really hard to talk about. But if I go to an encyclopedia, I want to hear a balanced presentation. \n\nIndeed, the Stanford Encyclopedia of Philosophy has long been a favorite of mine. Unfortunately, they recently published a new article on \"Capitalism\" that's extremely biased. Folks have tried to defend it. Here is my attempt to objectively show its bias.\n\nLanguage can be parsed into neutral, supporting, or critical statements. LLM's are very good at that. Now, LLMs can be tricky, so I uploaded every single sentence in an[ excel spreadsheet](https://github.com/EconChrisClarke/capitalism-encyclopedia-bias/blob/master/Capitalism_Encyclopedias_Full_Workbook.xlsx) and reviewed the judgement. Everything I saw was perfectly reasonable.\n\n![](data/images/c1f4nw6v-1793494804876-vgjn.png)\n\n![](data/images/c1f4nw6v-1793494666587-6khr.png)\n\nWikipedia continues to stand out as one of the best encyclopedias out there. The new Stanford Encyclopedia of Philosophy entry for 'Capitalism' devotes 20% more of their words to the critical perspective than they do the supportive view. More in the",
       "sources": [],
       "images": [
         {
           "path": "data/images/c1f4nw6v-1793494666587-6khr.png"
+        },
+        {
+          "path": "data/images/c1f4nw6v-1793494804876-vgjn.png"
         }
       ],
       "coverImage": null,

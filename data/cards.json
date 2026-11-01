@@ -1,6 +1,84 @@
 {
   "cards": [
     {
+      "id": "c1f4nw6v",
+      "title": "capitalism-encyclopedia-bias",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "![[Interactive version](https://econchrisclarke.github.io/capitalism-encyclopedia-bias/capitalism_leaning_by_source.html)](data/images/c1f4nw6v-graph1-1793493790654-ups3.png)\n\n![[Interactive version](https://econchrisclarke.github.io/capitalism-encyclopedia-bias/capitalism_support_minus_critical_index.html)](data/images/c1f4nw6v-graph2-1793493794286-ypry.png)",
+      "sources": [],
+      "images": [
+        {
+          "path": "data/images/c1f4nw6v-graph1-1793493790654-ups3.png"
+        },
+        {
+          "path": "data/images/c1f4nw6v-graph2-1793493794286-ypry.png"
+        }
+      ],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": "",
+          "title": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-11-01",
+      "graphSource": {
+        "repo": "capitalism-encyclopedia-bias",
+        "owner": "EconChrisClarke",
+        "importedAt": "2026-11-01T00:43:08.918Z",
+        "graphs": [
+          {
+            "n": 1,
+            "title": "Ideological leaning by source",
+            "url": "https://econchrisclarke.github.io/capitalism-encyclopedia-bias/capitalism_leaning_by_source.html",
+            "image": "data/images/c1f4nw6v-graph1-1793493790654-ups3.png"
+          },
+          {
+            "n": 2,
+            "title": "Support-minus-Critical index",
+            "url": "https://econchrisclarke.github.io/capitalism-encyclopedia-bias/capitalism_support_minus_critical_index.html",
+            "image": "data/images/c1f4nw6v-graph2-1793493794286-ypry.png"
+          }
+        ]
+      }
+    },
+    {
       "id": "cdxyxcdw",
       "title": "\"Stock Markets Shouldn't Have Ever Been Invented\"",
       "subtitle": "\"We Wouldn't Be In This Nonsense\"",

@@ -1296,7 +1296,7 @@
       ],
       "stage": "capture",
       "dead": false,
-      "script": "Should we ban the billionaires? Before I show the graph I want you to guess - which countries have less poverty? The ones with a lot of billionaires roaming around - or the ones with less?\n\nOK, here is the graph.\n\nOn the horizontal axis we have billionaires per capita. I put this together using Forbes list and adding in the oil monarchs in the middle east.\n\nThe vertical axis is the percent of the population living in poverty. Lower is better.\n\nIt's a striking graph. \n\n[https://econchrisclarke.github.io/Billionaire-Graphs/billionaires-per-capita-vs-poverty30.html ](https://econchrisclarke.github.io/Billionaire-Graphs/billionaires-per-capita-vs-poverty30.html)",
+      "script": "Should we ban the billionaires? Before I show the graph I want you to guess - which countries have less poverty? The ones with a lot of billionaires roaming around - or the ones with less?\n\nOK, here is the graph.\n\nOn the horizontal axis we have billionaires per capita. I put this together using Forbes list and adding in the oil monarchs in the middle east.\n\nThe vertical axis is the percent of the population living in poverty. Lower is better.\n\nIt's a striking graph. \n\nStrong correlation. R-squared of 0.6. That's very high for a two variable cross-section like this.\n\n[https://econchrisclarke.github.io/Billionaire-Graphs/billionaires-per-capita-vs-poverty30.html ](https://econchrisclarke.github.io/Billionaire-Graphs/billionaires-per-capita-vs-poverty30.html)",
       "sources": [],
       "images": [],
       "baseCaption": "",

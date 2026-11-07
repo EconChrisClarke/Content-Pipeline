@@ -39,7 +39,9 @@
           "path": "data/images/cnu3qg72-1794074200841-mj6f.jpg"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/cnu3qg72-cover-1794089708066-89ij.png"
+      },
       "baseCaption": "",
       "platforms": {
         "tiktok": {

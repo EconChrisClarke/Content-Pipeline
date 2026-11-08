@@ -28,7 +28,9 @@
           "path": "data/images/cvr5ed3t-1794164419412-dh6m.png"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/cvr5ed3t-cover-1794165394261-b68q.png"
+      },
       "baseCaption": "",
       "platforms": {
         "tiktok": {

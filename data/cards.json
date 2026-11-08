@@ -3,8 +3,16 @@
     {
       "id": "cvr5ed3t",
       "title": "What would it be like to have no billionaires?",
-      "subtitle": "",
-      "tags": [],
+      "subtitle": "Not every country has one",
+      "tags": [
+        "Economy",
+        "economics",
+        "inequality",
+        "rich",
+        "poor",
+        "countries",
+        "gdp"
+      ],
       "stage": "capture",
       "dead": false,
       "script": "",

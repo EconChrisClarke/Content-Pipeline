@@ -1,6 +1,58 @@
 {
   "cards": [
     {
+      "id": "cvr5ed3t",
+      "title": "What would it be like to have no billionaires?",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "",
+      "sources": [],
+      "images": [],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": "",
+          "title": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-11-08"
+    },
+    {
       "id": "cnu3qg72",
       "title": "Will the \"Blue Tsunami\" actually make the economy better?",
       "subtitle": "Post Midterm Economic Analysis",
@@ -42,37 +94,37 @@
       "coverImage": {
         "path": "data/images/cnu3qg72-cover-1794089708066-89ij.png"
       },
-      "baseCaption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.\n#economy #economics #prices #inflation #government ",
+      "baseCaption": "",
       "platforms": {
         "tiktok": {
           "status": "not_started",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.\n#economy #economics #prices #inflation #government ",
+          "caption": "",
           "link": ""
         },
         "instagram": {
           "status": "not_started",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.\n#economy #economics #prices #inflation #government ",
+          "caption": "",
           "link": ""
         },
         "threads_fb": {
           "status": "not_started",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.\n#economy #economics #prices #inflation #government ",
+          "caption": "",
           "link": ""
         },
         "x": {
           "status": "not_started",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.",
+          "caption": "",
           "link": ""
         },
         "youtube": {
-          "status": "posted",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.\n#economy #economics #prices #inflation #government ",
-          "link": "https://www.youtube.com/shorts/5FuGVEon_Ro",
+          "status": "not_started",
+          "caption": "",
+          "link": "",
           "title": ""
         },
         "bsky": {
           "status": "not_started",
-          "caption": "4 Policies to Improve Affordability and whether they will happen: 1. Tariff Reduction ✅ 2. End War ⬜ 3. Fed Independence ✅ 4. More Immigration ❌\nEven through they are all popular now, not all will happen.",
+          "caption": "",
           "link": ""
         },
         "substack": {

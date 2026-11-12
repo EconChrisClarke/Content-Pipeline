@@ -334,7 +334,8 @@ function migrateLegacyStages(cards){
 const PLATFORMS = [
   {key:'tiktok',     label:'TikTok',                 hashtags:true,  limit:null},
   {key:'instagram',  label:'Instagram',               hashtags:true,  limit:2200, isInstagram:true},
-  {key:'threads_fb', label:'Threads / Facebook',      hashtags:true,  limit:null},
+  {key:'facebook',   label:'Facebook',                hashtags:true,  limit:null, isFacebook:true},
+  {key:'threads_fb', label:'Threads',                 hashtags:true,  limit:null},
   {key:'x',          label:'X',                       hashtags:false, limit:280},
   {key:'youtube',    label:'YouTube',                 hashtags:true,  limit:null, isYouTube:true},
   {key:'bsky',       label:'Bluesky',                 hashtags:false, limit:300, isBluesky:true},
@@ -419,6 +420,139 @@ let ytConfig = loadYtConfig();
 // igCheckForOAuthRedirect/igCompleteConnect below for how that one
 // unavoidable step is handed to Christopher as a copy-paste command
 // instead, needed only when first connecting or fully reconnecting later.
+// ---- Facebook Page posting ----
+// Posts a video to a Facebook PAGE (not a personal profile) using a Page
+// access token created in the Meta developer app. Page ID + token are stored
+// only in this browser, like the other connections. The Graph API version is
+// left out of the URL on purpose so Meta uses the app's default version.
+const FB_CONFIG_KEY = 'cp_facebook_config_v1';
+function loadFbConfig(){
+  try{ return JSON.parse(localStorage.getItem(FB_CONFIG_KEY)) || null; }catch(e){ return null; }
+}
+function saveFbConfig(cfg){
+  localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(cfg));
+}
+let fbConfig = loadFbConfig();
+
+async function fbGraphError(res){
+  let msg = 'Facebook returned an error (' + res.status + ').';
+  try{
+    const j = await res.json();
+    if(j && j.error && j.error.message) msg = 'Facebook: ' + j.error.message + (j.error.code ? ' (code ' + j.error.code + ')' : '');
+  }catch(e){}
+  return new Error(msg);
+}
+
+// Looks up the Page's name with the saved ID + token -- proves they work.
+async function fbVerifyConnection(pageId, token){
+  const res = await fetch('https://graph.facebook.com/' + encodeURIComponent(pageId)
+    + '?fields=name&access_token=' + encodeURIComponent(token));
+  if(!res.ok) throw await fbGraphError(res);
+  const j = await res.json();
+  return j.name || pageId;
+}
+
+async function postVideoToFacebook(card, file, statusEl){
+  if(!fbConfig || !fbConfig.pageId || !fbConfig.pageToken){
+    setSyncStatus('bad', 'Connect Facebook in Settings first (Page ID + Page access token).');
+    return;
+  }
+  const description = (card.platforms.facebook && card.platforms.facebook.caption) || '';
+  const title = card.title || '';
+  try{
+    let videoId = null;
+    // Attempt 1: send the file straight from the browser to Facebook. No
+    // GitHub involved, so no GitHub size limit.
+    try{
+      if(statusEl) statusEl.textContent = 'Uploading video to Facebook (' + Math.round(file.size/1048576) + ' MB — keep this tab open)…';
+      const form = new FormData();
+      form.set('access_token', fbConfig.pageToken);
+      form.set('description', description);
+      form.set('title', title);
+      form.set('source', file, file.name || 'video.mp4');
+      const res = await fetch('https://graph-video.facebook.com/' + encodeURIComponent(fbConfig.pageId) + '/videos', {method:'POST', body: form});
+      if(!res.ok) throw await fbGraphError(res);
+      const j = await res.json();
+      videoId = j.id;
+    }catch(err){
+      // A TypeError from fetch means the browser blocked/never completed the
+      // request (e.g. CORS or network) -- anything else is a real answer from
+      // Facebook, so show it instead of silently retrying.
+      if(!(err instanceof TypeError)) throw err;
+      if(!ghConfig || !ghConfig.owner || !ghConfig.repo) throw new Error("The browser couldn't send the video straight to Facebook, and GitHub isn't connected for the backup method.");
+      if(file.size > IG_MAX_VIDEO_BYTES) throw new Error("The browser couldn't send the video straight to Facebook, and it's too big for the GitHub backup method (100MB).");
+      if(statusEl) statusEl.textContent = "Direct upload didn't work from the browser — trying the GitHub backup method…";
+      const base64 = await fileToBase64(file);
+      const ext = safeExt(file.name || 'video.mp4');
+      const path = 'data/videos/' + card.id + '-' + Date.now() + '.' + ext;
+      await ghPutBinaryFile(path, base64, 'Add video for Facebook post on card ' + card.id);
+      if(statusEl) statusEl.textContent = 'Facebook is fetching and processing the video…';
+      const form = new FormData();
+      form.set('access_token', fbConfig.pageToken);
+      form.set('description', description);
+      form.set('title', title);
+      form.set('file_url', igRawVideoUrl(path));
+      const res = await fetch('https://graph.facebook.com/' + encodeURIComponent(fbConfig.pageId) + '/videos', {method:'POST', body: form});
+      if(!res.ok) throw await fbGraphError(res);
+      const j = await res.json();
+      videoId = j.id;
+    }
+    if(!videoId) throw new Error('Facebook accepted the upload but did not return a video ID.');
+
+    card.platforms.facebook.status = 'posted';
+    card.platforms.facebook.link = 'https://www.facebook.com/watch/?v=' + videoId;
+    setSyncStatus('ok', 'Posted to Facebook.');
+    notifyPostResult('Posted to Facebook', card.title + '\n' + card.platforms.facebook.link);
+    renderModal();
+    const freshEl = document.getElementById('fbPostStatus');
+    if(freshEl) freshEl.textContent = 'Posted! Facebook may take a few minutes to finish processing the video. ' + card.platforms.facebook.link;
+    saveToGitHub();
+  }catch(err){
+    const msg = (err && err.message) ? err.message : 'Something went wrong posting to Facebook.';
+    if(statusEl) statusEl.textContent = msg;
+    setSyncStatus('bad', msg);
+    notifyPostResult('Facebook post failed', card.title + '\n' + msg);
+  }
+}
+
+function fbSettingsHtml(){
+  const f = fbConfig || {pageId:'', pageToken:'', pageName:''};
+  let html = '<h2 style="margin-top:28px;">Connect to Facebook</h2>' +
+    '<div class="banner">Used by the "Post video to Facebook" button. Posts to a Facebook <b>Page</b> (not a personal profile).</div>' +
+    '<div class="field"><label>Page ID</label><input type="text" id="fbPageId" value="'+escapeHtml(f.pageId||'')+'" placeholder="numbers only, from me/accounts in the Graph API Explorer"></div>' +
+    '<div class="field"><label>Page access token</label><input type="password" id="fbPageToken" value="'+escapeHtml(f.pageToken||'')+'" placeholder="EAA...">' +
+      '<div class="hint">From the Graph API Explorer: run <code>me/accounts</code> and copy the Page\'s <code>id</code> and <code>access_token</code>. For a token that never expires, first extend your user token at developers.facebook.com/tools/debug/accesstoken ("Extend Access Token"), then run <code>me/accounts</code> with that extended token. Stored only in this browser.</div></div>' +
+    '<div class="modal-actions"><div class="left">' + (f.pageToken ? '<button class="ghost" id="fbDisconnect">Disconnect</button>' : '') + '</div><button class="primary" id="fbSave">Save &amp; test Facebook connection</button></div>' +
+    '<div class="note" id="fbConnectStatus" style="margin-top:6px;">' + (f.pageName ? 'Connected to Page: ' + escapeHtml(f.pageName) : '') + '</div>';
+  return html;
+}
+function wireFbSettingsHandlers(){
+  const saveBtn = document.getElementById('fbSave');
+  if(saveBtn) saveBtn.onclick = async ()=>{
+    const pageId = document.getElementById('fbPageId').value.trim();
+    const pageToken = document.getElementById('fbPageToken').value.trim();
+    const statusEl = document.getElementById('fbConnectStatus');
+    if(!pageId || !pageToken){ if(statusEl) statusEl.textContent = 'Enter both the Page ID and the Page access token.'; return; }
+    if(statusEl) statusEl.textContent = 'Testing…';
+    try{
+      const pageName = await fbVerifyConnection(pageId, pageToken);
+      fbConfig = {pageId, pageToken, pageName};
+      saveFbConfig(fbConfig);
+      if(statusEl) statusEl.textContent = 'Connected to Page: ' + pageName;
+      setSyncStatus('ok', 'Facebook connected to Page "' + pageName + '".');
+    }catch(err){
+      if(statusEl) statusEl.textContent = (err && err.message) ? err.message : 'Could not verify the Page ID and token.';
+    }
+  };
+  const disBtn = document.getElementById('fbDisconnect');
+  if(disBtn) disBtn.onclick = ()=>{
+    fbConfig = null;
+    try{ localStorage.removeItem(FB_CONFIG_KEY); }catch(e){}
+    openSettings(false);
+    setSyncStatus('ok', 'Disconnected from Facebook.');
+  };
+}
+
 const IG_CONFIG_KEY = 'cp_instagram_config_v1';
 function loadIgConfig(){
   try{ return JSON.parse(localStorage.getItem(IG_CONFIG_KEY)) || null; }catch(e){ return null; }
@@ -873,6 +1007,7 @@ function openSettings(forced){
     '<div class="field"><label>OAuth Client ID</label><input type="text" id="ytClientId" value="'+escapeHtml(ycfg.clientId)+'" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">' +
       '<div class="hint">Not a secret (safe to store plainly) — but it comes from a Google Cloud project only you can create: console.cloud.google.com → New project → enable "YouTube Data API v3" → OAuth consent screen (External, Testing, add yourself as a test user, scope <code>youtube.upload</code>) → Credentials → Create OAuth client ID → Web application → Authorized JavaScript origin: your GitHub Pages URL → copy the Client ID here. Each time you post, you\'ll get a normal Google sign-in popup — no password stored here.</div></div>' +
     '<div class="modal-actions"><div class="left"></div><button class="primary" id="ytSave">Save YouTube connection</button></div>' +
+    fbSettingsHtml() +
     igSettingsHtml() +
     '';
   document.getElementById('overlay-el').classList.add('open');
@@ -903,6 +1038,7 @@ function openSettings(forced){
     saveYtConfig(ytConfig);
     setSyncStatus('ok', 'YouTube connection saved for this device.');
   };
+  wireFbSettingsHandlers();
   wireIgSettingsHandlers();
 }
 
@@ -1996,8 +2132,13 @@ const YT_CATEGORY_ID = '27'; // Education
 const YT_UPLOAD_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
 
 let ytTokenClient = null;
+// Token is cached (Google tokens last ~1 hour) so sign-in can happen in its own
+// click -- browsers block the Google popup unless it opens straight from a click.
+let ytCachedToken = null, ytCachedTokenExp = 0;
+function ytHasValidToken(){ return !!ytCachedToken && Date.now() < ytCachedTokenExp; }
 function ytGetAccessToken(){
   return new Promise((resolve, reject)=>{
+    if(ytHasValidToken()){ resolve(ytCachedToken); return; }
     if(!ytConfig || !ytConfig.clientId){
       reject(new Error('Connect YouTube in Settings first (OAuth Client ID).'));
       return;
@@ -2013,7 +2154,11 @@ function ytGetAccessToken(){
         client_id: ytConfig.clientId,
         scope: YT_UPLOAD_SCOPE,
         callback: (resp)=>{
-          if(resp && resp.access_token) resolve(resp.access_token);
+          if(resp && resp.access_token){
+            ytCachedToken = resp.access_token;
+            ytCachedTokenExp = Date.now() + Math.max(60, (parseInt(resp.expires_in,10)||3600) - 120) * 1000;
+            resolve(resp.access_token);
+          }
           else reject(new Error('Google sign-in did not return an access token.'));
         },
         error_callback: (err)=>{
@@ -3869,6 +4014,22 @@ function renderModal(){
           '<div class="note" id="ytPostStatus" style="margin-top:4px;"></div>' +
           linkFieldHtml(p.key, st.link, 'Link once live') +
         '</div>';
+      } else if(p.isFacebook){
+        const count = st.caption.length;
+        platformsHtml +=
+        '<div class="platform-row"><div class="ptop"><span class="pname">'+p.label+'</span>' +
+          '<select data-plat="'+p.key+'" data-field="status">' +
+            '<option value="not_started" '+(st.status==='not_started'?'selected':'')+'>Not started</option>' +
+            '<option value="posted" '+(st.status==='posted'?'selected':'')+'>Posted</option>' +
+          '</select></div>' +
+          '<textarea data-plat="'+p.key+'" data-field="caption" placeholder="Caption for Facebook">'+escapeHtml(st.caption)+'</textarea>' +
+          '<div class="charcount">'+count+'</div>' +
+          '<div class="note">Posts the video to your Facebook Page. The video is sent straight from this browser to Facebook — keep the tab open until it finishes.</div>' +
+          '<input type="file" id="fbVideoInput" accept="video/*" style="display:none">' +
+          '<button class="primary" type="button" id="postFacebookBtn" style="margin-top:8px;width:100%;">📘 Post video to Facebook</button>' +
+          '<div class="note" id="fbPostStatus" style="margin-top:4px;"></div>' +
+          linkFieldHtml(p.key, st.link, 'Link once live') +
+        '</div>';
       } else if(p.isInstagram){
         const count = st.caption.length;
         const over = p.limit && count>p.limit;
@@ -4020,7 +4181,19 @@ function renderModal(){
   const ytVideoInput = document.getElementById('ytVideoInput');
   const ytThumbInput = document.getElementById('ytThumbInput');
   if(postYoutubeBtn && ytVideoInput && ytThumbInput){
-    postYoutubeBtn.onclick = ()=>{ commitModalFields(); ytVideoInput.click(); };
+    postYoutubeBtn.onclick = ()=>{
+      commitModalFields();
+      const st = document.getElementById('ytPostStatus');
+      if(ytHasValidToken()){ ytVideoInput.click(); return; }
+      // Not signed in yet: sign in FIRST, straight from this click (so the popup
+      // isn't blocked), then ask for a second click to choose the video.
+      if(st) st.textContent = 'Opening Google sign-in…';
+      ytGetAccessToken().then(()=>{
+        if(st) st.textContent = 'Signed in to Google ✓ — click "Post to YouTube" again to choose your video.';
+      }).catch(err=>{
+        if(st) st.textContent = (err && err.message) || 'Google sign-in failed.';
+      });
+    };
     ytVideoInput.onchange = async (e)=>{
       const videoFile = e.target.files && e.target.files[0];
       e.target.value = '';
@@ -4050,6 +4223,18 @@ function renderModal(){
         };
         ytThumbInput.click();
       }
+    };
+  }
+
+  const postFacebookBtn = document.getElementById('postFacebookBtn');
+  const fbVideoInput = document.getElementById('fbVideoInput');
+  if(postFacebookBtn && fbVideoInput){
+    postFacebookBtn.onclick = ()=>{ commitModalFields(); fbVideoInput.click(); };
+    fbVideoInput.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(!file) return;
+      postVideoToFacebook(c, file, document.getElementById('fbPostStatus'));
     };
   }
 

@@ -1,6 +1,63 @@
 {
   "cards": [
     {
+      "id": "cayk8ga2",
+      "title": "Crypto Regulation Trump",
+      "subtitle": "",
+      "tags": [],
+      "stage": "capture",
+      "dead": false,
+      "script": "",
+      "sources": [],
+      "images": [],
+      "coverImage": null,
+      "baseCaption": "",
+      "platforms": {
+        "tiktok": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "instagram": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "x": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "youtube": {
+          "status": "not_started",
+          "caption": "",
+          "link": "",
+          "title": ""
+        },
+        "bsky": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "substack": {
+          "status": "not_started",
+          "draft": "",
+          "link": ""
+        }
+      },
+      "createdAt": "2026-11-19"
+    },
+    {
       "id": "cvr5ed3t",
       "title": "What Would It Be Like Without Billionaires?",
       "subtitle": "Not every country has one",
@@ -67,6 +124,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -151,6 +213,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-11-06"
@@ -212,6 +279,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -314,6 +386,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-10-31"
@@ -411,6 +488,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-10-29"
@@ -493,6 +575,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-10-24"
@@ -548,6 +635,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -607,6 +699,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -683,6 +780,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -801,6 +903,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-22"
@@ -853,6 +960,11 @@
           "status": "not_started",
           "draft": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-16"
@@ -904,6 +1016,11 @@
         "substack": {
           "status": "not_started",
           "draft": "",
+          "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
           "link": ""
         }
       },
@@ -988,6 +1105,11 @@
           "status": "not_started",
           "caption": "Do poor families get $181k from the government? No. Government support also goes to those struggling who are above the \"official\" poverty line. Balancing the budget on the backs of the more vulnerable among us is plain wicked, in my opinion.\n\n#budget #economy #government #money #economics ",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-14"
@@ -1050,6 +1172,11 @@
           "status": "not_started",
           "caption": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-13"
@@ -1103,6 +1230,11 @@
           "link": ""
         },
         "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
           "status": "not_started",
           "caption": "",
           "link": ""
@@ -1202,6 +1334,11 @@
           "status": "not_started",
           "caption": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-09-07",
@@ -1275,6 +1412,11 @@
           "status": "not_started",
           "caption": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-08-29",
@@ -1323,6 +1465,11 @@
           "link": ""
         },
         "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
           "status": "not_started",
           "caption": "",
           "link": ""
@@ -1382,6 +1529,11 @@
           "status": "not_started",
           "caption": "",
           "link": ""
+        },
+        "facebook": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
         }
       },
       "createdAt": "2026-08-28",
@@ -1430,6 +1582,11 @@
           "link": ""
         },
         "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
           "status": "not_started",
           "caption": "",
           "link": ""
@@ -1498,6 +1655,11 @@
           "link": ""
         },
         "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
           "status": "not_started",
           "caption": "",
           "link": ""
@@ -1589,6 +1751,11 @@
           "link": ""
         },
         "threads_fb": {
+          "status": "not_started",
+          "caption": "",
+          "link": ""
+        },
+        "facebook": {
           "status": "not_started",
           "caption": "",
           "link": ""

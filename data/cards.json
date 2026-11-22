@@ -48,7 +48,9 @@
           "path": "data/images/chyxx44d-1795373725055-ytzx.jpg"
         }
       ],
-      "coverImage": null,
+      "coverImage": {
+        "path": "data/images/chyxx44d-cover-1795374116562-ujd5.png"
+      },
       "baseCaption": "",
       "platforms": {
         "tiktok": {

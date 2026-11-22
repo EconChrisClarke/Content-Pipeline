@@ -7,14 +7,11 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "You do not understand this woodcut.\n\nWhy is death snuffing out the nun's candle?\n\n![\"The Nun\" by Hans Holbein](data/images/chyxx44d-1795366711419-cf9y.jpg)\n\nNow I'm sure you're thinking. It's death. The Nun's time has arrived. The candle's light is the symbol of her life. \n\nWrong. \n\nThis image is part of a series from Hans Holbein. You may have seen his famous portrait of King Henry VIII.\n\n![King Henry VIII after the original but now lost Hans Holbein](data/images/chyxx44d-1795367040047-8w27.jpg)",
+      "script": "You do not understand this woodcut.\n\nWhy is death snuffing out the nun's candle?\n\n![\"The Nun\" by Hans Holbein](data/images/chyxx44d-1795366711419-cf9y.jpg)\n\nNow I'm sure you're thinking. It's death. The Nun's time has arrived. The candle's light is the symbol of her life.\n\nWrong.\n\nThis image is part of a series from Hans Holbein. You may have seen his famous portrait of King Henry VIII.",
       "sources": [],
       "images": [
         {
           "path": "data/images/chyxx44d-1795366711419-cf9y.jpg"
-        },
-        {
-          "path": "data/images/chyxx44d-1795367040047-8w27.jpg"
         }
       ],
       "coverImage": null,

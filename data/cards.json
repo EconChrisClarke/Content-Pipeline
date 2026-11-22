@@ -7,14 +7,11 @@
       "tags": [],
       "stage": "capture",
       "dead": false,
-      "script": "Why is death snuffing this candle of a nun?\n\n![\"The Nun\"](data/images/chyxx44d-1795366711419-cf9y.jpg)\n\n![](data/images/chyxx44d-1795366723543-04xp.jpg)",
+      "script": "Why is death snuffing this candle of a nun?\n\n![\"The Nun\"](data/images/chyxx44d-1795366711419-cf9y.jpg)",
       "sources": [],
       "images": [
         {
           "path": "data/images/chyxx44d-1795366711419-cf9y.jpg"
-        },
-        {
-          "path": "data/images/chyxx44d-1795366723543-04xp.jpg"
         }
       ],
       "coverImage": null,
